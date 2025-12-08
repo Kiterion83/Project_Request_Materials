@@ -1,680 +1,1985 @@
-// ============================================================
-// MATERIALS MANAGER V25 - STREICHER EDITION
-// ============================================================
-// Modern UI with STREICHER branding
-// ============================================================
-
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// ============================================================
-// SUPABASE CLIENT CONFIGURATION
-// ============================================================
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'YOUR_SUPABASE_URL';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
+// ============================================
+// SUPABASE CONFIG
+// ============================================
+const supabaseUrl = 'https://cqqlzexwcwmegqeyqyi.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxcWx6ZXh3Y3dtZWdxZXlxeWkiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTczMzQxMzY4NSwiZXhwIjoyMDQ4OTg5Njg1fQ.cNGqHkWmIo5d3_hcUMaIpPxGWYmVnq8f-zthkYM5SXk';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// ============================================================
-// STREICHER COLORS
-// ============================================================
+// ============================================
+// COLORS (STREICHER DESIGN)
+// ============================================
 const COLORS = {
   primary: '#E31E24',
-  primaryDark: '#B91C1C',
-  primaryLight: '#FEE2E2',
   secondary: '#1F2937',
-  accent: '#374151',
-  white: '#FFFFFF',
-  light: '#F9FAFB',
-  border: '#E5E7EB',
-  success: '#059669',
-  warning: '#D97706',
-  info: '#2563EB',
-  purple: '#7C3AED'
+  background: '#F9FAFB',
+  success: '#16a34a',
+  warning: '#ea580c',
+  info: '#2563eb',
+  purple: '#7c3aed',
+  pink: '#ec4899',
+  cyan: '#0891b2',
+  yellow: '#ca8a04',
+  gray: '#6b7280',
+  danger: '#dc2626',
 };
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-export default function MaterialsManager() {
-  const [view, setView] = useState('dashboard');
-  const [modal, setModal] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  const [materials, setMaterials] = useState({});
-  const [inventory, setInventory] = useState({ yard: {}, site: {}, inTransit: {} });
+// ============================================
+// MAIN APP COMPONENT
+// ============================================
+export default function App() {
+  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  
+  // Data states
   const [requests, setRequests] = useState([]);
+  const [components, setComponents] = useState([]);
+  const [inventory, setInventory] = useState([]);
   const [movements, setMovements] = useState([]);
-  const [mirs, setMirs] = useState([]);
-  const [projectDb, setProjectDb] = useState([]);
-  const [dbLog, setDbLog] = useState([]);
+  const [materials, setMaterials] = useState([]);
   const [readyOut, setReadyOut] = useState([]);
   const [delivered, setDelivered] = useState([]);
   const [orderLog, setOrderLog] = useState([]);
-  const [counter, setCounter] = useState(1001);
-
-  const [form, setForm] = useState({ name: '', badge: '', iso: '', spool: '', hf: '', cat: 'Bulk' });
-  const [itemForm, setItemForm] = useState({ code: '', qty: '' });
-  const [requestItems, setRequestItems] = useState([]);
-  const [mirForm, setMirForm] = useState({ mir: '', rk: '', forecast: '', priority: 'Medium' });
-  const [loadForm, setLoadForm] = useState({ code: '', qty: '', mir: '', rk: '' });
-  const [balanceForm, setBalanceForm] = useState({ code: '', qty: '', loc: 'YARD', balType: 'Adjustment', note: '', name: '', badge: '' });
-
-  const [search, setSearch] = useState('');
-  const [movSearch, setMovSearch] = useState('');
-  const [statusFilters, setStatusFilters] = useState({ name: '', num: '', code: '', hf: '' });
+  
+  // Modal states
+  const [splitModal, setSplitModal] = useState({ open: false, component: null, destinations: [] });
+  const [orderModal, setOrderModal] = useState({ open: false, component: null });
+  const [movementModal, setMovementModal] = useState({ open: false });
+  const [noteModal, setNoteModal] = useState({ open: false, component: null });
+  const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
+  const [newRequestModal, setNewRequestModal] = useState(false);
+  
+  // Orders tab
   const [ordersTab, setOrdersTab] = useState('toOrder');
 
-  const [dbUnlocked, setDbUnlocked] = useState(false);
-  const [pwdInput, setPwdInput] = useState('');
-  const [editCell, setEditCell] = useState(null);
-  const [editVal, setEditVal] = useState('');
-  const [editReason, setEditReason] = useState('');
+  // ============================================
+  // AUTHENTICATION
+  // ============================================
+  const handleLogin = () => {
+    if (password === 'streicher2024') {
+      setIsAuthenticated(true);
+    } else {
+      alert('Password errata!');
+    }
+  };
 
-  useEffect(() => { loadAllData(); }, []);
-
-  const loadAllData = async () => {
-    setLoading(true);
+  // ============================================
+  // DATA FETCHING
+  // ============================================
+  const fetchAllData = async () => {
     try {
-      const { data: matData } = await supabase.from('materials').select('*').eq('is_active', true);
-      if (matData) {
-        const matObj = {};
-        matData.forEach(m => { matObj[m.code] = m.description; });
-        setMaterials(matObj);
-      }
-
-      const { data: invData } = await supabase.from('inventory').select('*');
-      if (invData) {
-        const inv = { yard: {}, site: {}, inTransit: {} };
-        invData.forEach(i => {
-          const loc = i.location.toLowerCase();
-          if (loc === 'intransit') inv.inTransit[i.code] = i.quantity;
-          else if (inv[loc]) inv[loc][i.code] = i.quantity;
-        });
-        setInventory(inv);
-      }
-
-      const { data: reqData } = await supabase.from('requests').select(`*, request_components (*)`).order('created_at', { ascending: false });
-      if (reqData) {
-        const formattedRequests = reqData.map(r => ({
-          id: r.id, num: r.request_number, sub: r.sub_number, name: r.requester_name,
-          badge: r.requester_badge, iso: r.iso, spool: r.spool, hf: r.hf_number,
-          cat: r.category, date: r.created_at,
-          comp: r.request_components.map(c => ({
-            id: c.id, code: c.code, desc: c.description, qty: c.quantity, st: c.status,
-            sentTo: c.sent_to, engCat: c.eng_category, engNote: c.eng_note, mngNote: c.mng_note,
-            mngDate: c.mng_date, orderType: c.order_type, orderDate: c.order_date,
-            purchaseQty: c.purchase_qty, purchaseForecast: c.purchase_forecast,
-            spareDate: c.spare_date, techNote: c.tech_note, checkResponse: c.check_response
-          }))
-        }));
-        setRequests(formattedRequests);
-      }
-
-      const { data: movData } = await supabase.from('movements').select('*').order('movement_date', { ascending: false });
-      if (movData) {
-        setMovements(movData.map(m => ({
-          id: m.id, d: m.movement_date, type: m.type, loc: m.location, code: m.code,
-          qty: m.quantity, note: m.note, balType: m.balance_type, ref: m.reference,
-          mir: m.mir_number, rk: m.rk_number
-        })));
-      }
-
-      const { data: mirData } = await supabase.from('mirs').select('*').order('created_at', { ascending: false });
-      if (mirData) {
-        setMirs(mirData.map(m => ({
-          id: m.id, mir: m.mir_number, rk: m.rk_number, status: m.status,
-          forecast: m.forecast_date, priority: m.priority, created: m.created_at
-        })));
-      }
-
-      const { data: dbData } = await supabase.from('project_db').select('*').order('code');
-      if (dbData) {
-        setProjectDb(dbData.map(p => ({
-          id: p.id, code: p.code, desc: p.description,
-          project: p.qty_project || 0, ten: p.qty_ten || 0, out: p.qty_out || 0
-        })));
-      }
-
-      const { data: logData } = await supabase.from('db_log').select('*').order('changed_at', { ascending: false });
-      if (logData) {
-        setDbLog(logData.map(l => ({
-          id: l.id, code: l.code, field: l.field, old: l.old_value, new: l.new_value,
-          reason: l.reason, user: l.changed_by, date: l.changed_at
-        })));
-      }
-
-      const { data: readyData } = await supabase.from('ready_out').select('*');
-      if (readyData) {
-        setReadyOut(readyData.map(r => ({
-          id: r.id, reqId: r.request_id, compId: r.component_id, reqNum: r.request_number,
-          name: r.requester_name, badge: r.requester_badge, iso: r.iso, spool: r.spool,
-          hf: r.hf_number, code: r.code, desc: r.description, qty: r.quantity, loc: r.location
-        })));
-      }
-
-      const { data: delData } = await supabase.from('delivered').select('*').order('delivered_at', { ascending: false });
-      if (delData) {
-        setDelivered(delData.map(d => ({
-          id: d.id, reqNum: d.request_number, name: d.requester_name, badge: d.requester_badge,
-          iso: d.iso, spool: d.spool, code: d.code, desc: d.description, qty: d.quantity, date: d.delivered_at
-        })));
-      }
-
-      const { data: ordData } = await supabase.from('order_log').select('*').order('created_at', { ascending: false });
-      if (ordData) {
-        setOrderLog(ordData.map(o => ({
-          id: o.id, reqNum: o.request_number, code: o.code, desc: o.description, qty: o.quantity,
-          orderType: o.order_type, orderDate: o.order_date, forecast: o.forecast_date,
-          status: o.status, arrivedDate: o.arrived_date
-        })));
-      }
-
-      const { data: cntData } = await supabase.from('counters').select('*').eq('id', 'request_number').single();
-      if (cntData) setCounter(cntData.value);
-    } catch (err) {
-      setError('Error loading data: ' + err.message);
-      console.error(err);
+      const [reqRes, compRes, invRes, movRes, matRes, readyRes, delRes, ordRes] = await Promise.all([
+        supabase.from('requests').select('*').order('created_at', { ascending: false }),
+        supabase.from('request_components').select('*'),
+        supabase.from('inventory').select('*'),
+        supabase.from('movements').select('*').order('movement_date', { ascending: false }),
+        supabase.from('materials').select('*'),
+        supabase.from('ready_out').select('*'),
+        supabase.from('delivered').select('*'),
+        supabase.from('order_log').select('*').order('created_at', { ascending: false }),
+      ]);
+      
+      if (reqRes.data) setRequests(reqRes.data);
+      if (compRes.data) setComponents(compRes.data);
+      if (invRes.data) setInventory(invRes.data);
+      if (movRes.data) setMovements(movRes.data);
+      if (matRes.data) setMaterials(matRes.data);
+      if (readyRes.data) setReadyOut(readyRes.data);
+      if (delRes.data) setDelivered(delRes.data);
+      if (ordRes.data) setOrderLog(ordRes.data);
+    } catch (error) {
+      console.error('Error fetching data:', error);
     }
-    setLoading(false);
   };
 
-  const now = () => new Date().toISOString();
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString() : '';
-  const formatDateTime = (d) => d ? new Date(d).toLocaleString() : '';
-  const formatReqNum = (n, s) => `${n}-${s}`;
-
-  const updateInventory = async (code, location, quantity) => {
-    const loc = location.toUpperCase();
-    await supabase.from('inventory').upsert({ code, location: loc, quantity, last_updated: now() }, { onConflict: 'code,location' });
-  };
-
-  const addMovement = async (movement) => {
-    await supabase.from('movements').insert({
-      movement_date: movement.d || now(), type: movement.type, location: movement.loc,
-      code: movement.code, quantity: movement.qty, note: movement.note,
-      balance_type: movement.balType, reference: movement.ref, mir_number: movement.mir, rk_number: movement.rk
-    });
-  };
-
-  const getNextRequestNumber = async () => {
-    const { data, error } = await supabase.rpc('get_next_request_number');
-    if (error) { console.error('Counter error:', error); return counter + 1; }
-    setCounter(data);
-    return data;
-  };
-
-  const addItemToRequest = () => {
-    if (!itemForm.code || !itemForm.qty || +itemForm.qty <= 0) return alert('Select code and enter valid quantity');
-    const desc = materials[itemForm.code] || itemForm.code;
-    setRequestItems([...requestItems, { id: Date.now(), code: itemForm.code, desc, qty: +itemForm.qty }]);
-    setItemForm({ code: '', qty: '' });
-  };
-
-  const removeItemFromRequest = (itemId) => {
-    setRequestItems(requestItems.filter(i => i.id !== itemId));
-  };
-
-  const submitRequest = async (destination) => {
-    if (!form.name || !form.badge || !form.iso || !form.spool) return alert('Fill all required fields');
-    if (form.cat === 'Erection' && !form.hf) return alert('HF Number is required for Erection');
-    if (requestItems.length === 0) return alert('Add at least one material');
-
-    if (form.hf) {
-      const existingHF = requests.find(r => r.hf === form.hf);
-      if (existingHF) {
-        const conf = window.confirm(`⚠️ HF ${form.hf} already used by ${existingHF.name}. Continue anyway?`);
-        if (!conf) return;
-      }
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchAllData();
     }
+  }, [isAuthenticated]);
 
-    setLoading(true);
-    try {
-      const reqNum = await getNextRequestNumber();
-      const status = destination === 'Eng' ? 'Eng' : destination;
-
-      const { data: reqData, error: reqError } = await supabase.from('requests').insert({
-        request_number: reqNum, sub_number: 1, requester_name: form.name, requester_badge: form.badge,
-        iso: form.iso, spool: form.spool, hf_number: form.hf || null, category: form.cat, created_at: now()
-      }).select().single();
-
-      if (reqError) throw reqError;
-
-      for (const item of requestItems) {
-        await supabase.from('request_components').insert({
-          request_id: reqData.id, code: item.code, description: item.desc, quantity: item.qty, status: status
-        });
-      }
-
-      setForm({ name: '', badge: '', iso: '', spool: '', hf: '', cat: 'Bulk' });
-      setRequestItems([]);
-      await loadAllData();
-      alert(`✅ Request ${reqNum}-1 submitted to ${destination}`);
-    } catch (err) {
-      setError('Error submitting request: ' + err.message);
-    }
-    setLoading(false);
+  // ============================================
+  // INVENTORY HELPERS
+  // ============================================
+  const getInventoryQty = (materialCode, location) => {
+    const inv = inventory.find(i => i.material_code === materialCode && i.location === location);
+    return inv ? inv.quantity : 0;
   };
 
-  const updateComponentStatus = async (reqId, compId, newStatus, additionalData = {}) => {
-    const updates = { status: newStatus, ...additionalData };
-    const { error } = await supabase.from('request_components').update(updates).eq('id', compId);
-    if (error) { console.error('Component update error:', error); return false; }
-    await loadAllData();
-    return true;
-  };
-
-  const engSendTo = async (req, comp, dest, cat) => {
-    await updateComponentStatus(req.id, comp.id, dest, { eng_category: cat, sent_to: dest });
-  };
-
-  const mngSendTo = async (req, comp, dest, note = '') => {
-    await updateComponentStatus(req.id, comp.id, dest, { mng_note: note, mng_date: now() });
-  };
-
-  const moveToOut = async (req, comp) => {
-    const loc = (inventory.site[comp.code] || 0) > 0 ? 'SITE' : 'YARD';
-    await supabase.from('ready_out').insert({
-      request_id: req.id, component_id: comp.id, request_number: formatReqNum(req.num, req.sub),
-      requester_name: req.name, requester_badge: req.badge, iso: req.iso, spool: req.spool,
-      hf_number: req.hf, code: comp.code, description: comp.desc, quantity: comp.qty, location: loc
-    });
-    await updateComponentStatus(req.id, comp.id, 'Out');
-  };
-
-  const deliverMaterial = async (item) => {
-    const currentQty = item.loc === 'SITE' ? (inventory.site[item.code] || 0) : (inventory.yard[item.code] || 0);
-    const newQty = currentQty - item.qty;
-    await updateInventory(item.code, item.loc, Math.max(0, newQty));
-    await addMovement({ type: 'OUT', loc: item.loc, code: item.code, qty: item.qty, note: `Delivered to ${item.name}`, ref: item.reqNum });
-    await supabase.from('delivered').insert({
-      request_number: item.reqNum, requester_name: item.name, requester_badge: item.badge,
-      iso: item.iso, spool: item.spool, code: item.code, description: item.desc, quantity: item.qty, delivered_at: now()
-    });
-    await supabase.from('request_components').update({ status: 'Done' }).eq('id', item.compId);
-    await supabase.from('ready_out').delete().eq('id', item.id);
-    const dbItem = projectDb.find(p => p.code === item.code);
-    if (dbItem) await supabase.from('project_db').update({ qty_out: dbItem.out + item.qty }).eq('code', item.code);
-    await loadAllData();
-  };
-
-  const transferToSite = async (req, comp) => {
-    const yardQty = inventory.yard[comp.code] || 0;
-    await updateInventory(comp.code, 'YARD', Math.max(0, yardQty - comp.qty));
-    const transitQty = inventory.inTransit[comp.code] || 0;
-    await updateInventory(comp.code, 'INTRANSIT', transitQty + comp.qty);
-    await addMovement({ type: 'TRF', loc: 'YARD→TRANSIT', code: comp.code, qty: comp.qty, ref: formatReqNum(req.num, req.sub) });
-    await updateComponentStatus(req.id, comp.id, 'Trans');
-  };
-
-  const confirmArrival = async (req, comp) => {
-    const transitQty = inventory.inTransit[comp.code] || 0;
-    await updateInventory(comp.code, 'INTRANSIT', Math.max(0, transitQty - comp.qty));
-    const siteQty = inventory.site[comp.code] || 0;
-    await updateInventory(comp.code, 'SITE', siteQty + comp.qty);
-    await addMovement({ type: 'TRF', loc: 'TRANSIT→SITE', code: comp.code, qty: comp.qty, ref: formatReqNum(req.num, req.sub) });
-    await updateComponentStatus(req.id, comp.id, 'Site');
-  };
-
-  const loadMaterial = async () => {
-    if (!loadForm.code || !loadForm.qty || +loadForm.qty <= 0) return alert('Select code and enter quantity');
-    const currentQty = inventory.yard[loadForm.code] || 0;
-    await updateInventory(loadForm.code, 'YARD', currentQty + +loadForm.qty);
-    await addMovement({ type: 'IN', loc: 'YARD', code: loadForm.code, qty: +loadForm.qty, mir: loadForm.mir, rk: loadForm.rk });
-    if (loadForm.mir) {
-      const mir = mirs.find(m => m.mir === loadForm.mir);
-      if (mir) await supabase.from('mirs').update({ status: 'Received' }).eq('mir_number', loadForm.mir);
-    }
-    setLoadForm({ code: '', qty: '', mir: '', rk: '' });
-    await loadAllData();
-    alert('✅ Material loaded to YARD');
-  };
-
-  const registerBalance = async () => {
-    if (!balanceForm.code || !balanceForm.qty || !balanceForm.name || !balanceForm.badge) return alert('Fill all required fields');
-    const qty = +balanceForm.qty;
-    const loc = balanceForm.loc.toLowerCase();
-    const currentQty = loc === 'yard' ? (inventory.yard[balanceForm.code] || 0) : (inventory.site[balanceForm.code] || 0);
-    let newQty;
-    if (balanceForm.balType === 'Lost' || balanceForm.balType === 'Broken') newQty = Math.max(0, currentQty - qty);
-    else newQty = qty;
-    await updateInventory(balanceForm.code, balanceForm.loc, newQty);
-    await addMovement({ type: 'BAL', loc: balanceForm.loc, code: balanceForm.code, qty: balanceForm.balType === 'Adjustment' ? qty : -qty, balType: balanceForm.balType, note: `${balanceForm.balType}: ${balanceForm.note} (by ${balanceForm.name})` });
-    setBalanceForm({ code: '', qty: '', loc: 'YARD', balType: 'Adjustment', note: '', name: '', badge: '' });
-    setModal(null);
-    await loadAllData();
-    alert('✅ Balance registered');
-  };
-
-  const addMIR = async () => {
-    if (!mirForm.mir || !mirForm.rk) return alert('Fill MIR and RK numbers');
-    await supabase.from('mirs').insert({ mir_number: mirForm.mir, rk_number: mirForm.rk, status: 'Pending', forecast_date: mirForm.forecast || null, priority: mirForm.priority, created_at: now() });
-    setMirForm({ mir: '', rk: '', forecast: '', priority: 'Medium' });
-    await loadAllData();
-    alert('✅ MIR registered');
-  };
-
-  const checkPwd = () => {
-    if (pwdInput === 'streicher2024') { setDbUnlocked(true); setPwdInput(''); }
-    else alert('❌ Wrong password');
-  };
-
-  const startEdit = (code, field, currentValue) => {
-    setEditCell({ code, field });
-    setEditVal(currentValue?.toString() || '');
-    setEditReason('');
-  };
-
-  const saveEdit = async () => {
-    if (!editReason) return alert('Please enter a reason for the change');
-    const item = projectDb.find(p => p.code === editCell.code);
-    const oldVal = item[editCell.field];
-    const updateField = editCell.field === 'project' ? 'qty_project' : editCell.field === 'ten' ? 'qty_ten' : 'qty_out';
-    await supabase.from('project_db').update({ [updateField]: +editVal }).eq('code', editCell.code);
-    await supabase.from('db_log').insert({ code: editCell.code, field: editCell.field, old_value: oldVal?.toString(), new_value: editVal, reason: editReason, changed_by: 'User', changed_at: now() });
-    setEditCell(null); setEditVal(''); setEditReason('');
-    await loadAllData();
-  };
-
-  const markAsOrdered = async (req, comp, orderType) => {
-    await updateComponentStatus(req.id, comp.id, 'Ordered', { order_type: orderType, order_date: now() });
-    await supabase.from('order_log').insert({ request_number: formatReqNum(req.num, req.sub), code: comp.code, description: comp.desc, quantity: comp.qty, order_type: orderType, order_date: now(), status: 'Pending' });
-    await loadAllData();
-  };
-
-  const markOrderArrived = async (order) => {
-    await supabase.from('order_log').update({ status: 'Arrived', arrived_date: now() }).eq('id', order.id);
-    for (const req of requests) {
-      for (const comp of req.comp) {
-        if (comp.code === order.code && comp.st === 'Ordered') {
-          await updateComponentStatus(req.id, comp.id, 'Site');
-          break;
-        }
-      }
-    }
-    await loadAllData();
-  };
-
-  const getStats = () => {
-    const stats = { eng: 0, mng: 0, site: 0, yard: 0, out: 0, trans: 0, order: 0, ordered: 0, spare: 0, done: 0, mirP: 0, lost: 0, broken: 0 };
-    requests.forEach(r => {
-      r.comp.forEach(c => {
-        if (c.st === 'Eng') stats.eng++;
-        else if (c.st === 'Mng') stats.mng++;
-        else if (c.st === 'Site') stats.site++;
-        else if (c.st === 'Yard') stats.yard++;
-        else if (c.st === 'Out') stats.out++;
-        else if (c.st === 'Trans') stats.trans++;
-        else if (c.st === 'Order') stats.order++;
-        else if (c.st === 'Ordered') stats.ordered++;
-        else if (c.st === 'Spare') stats.spare++;
-        else if (c.st === 'Done') stats.done++;
+  const updateInventory = async (materialCode, location, change) => {
+    const existing = inventory.find(i => i.material_code === materialCode && i.location === location);
+    if (existing) {
+      await supabase.from('inventory').update({ 
+        quantity: existing.quantity + change,
+        updated_at: new Date().toISOString()
+      }).eq('id', existing.id);
+    } else if (change > 0) {
+      await supabase.from('inventory').insert({
+        material_code: materialCode,
+        location,
+        quantity: change
       });
+    }
+  };
+
+  // ============================================
+  // MOVEMENT HELPER
+  // ============================================
+  const recordMovement = async (type, location, materialCode, quantity, note = '', reference = '') => {
+    await supabase.from('movements').insert({
+      movement_type: type,
+      location,
+      material_code: materialCode,
+      quantity,
+      note,
+      reference,
+      movement_date: new Date().toISOString()
     });
-    stats.mirP = mirs.filter(m => m.status === 'Pending').length;
-    stats.lost = movements.filter(m => m.balType === 'Lost').reduce((sum, m) => sum + Math.abs(m.qty), 0);
-    stats.broken = movements.filter(m => m.balType === 'Broken').reduce((sum, m) => sum + Math.abs(m.qty), 0);
-    return stats;
   };
 
-  const stats = getStats();
-
-  // STYLES
-  const s = {
-    app: { display: 'flex', height: '100vh', fontFamily: "'Segoe UI', sans-serif", fontSize: 14, background: '#F3F4F6' },
-    sidebar: { width: sidebarCollapsed ? 70 : 260, background: `linear-gradient(180deg, ${COLORS.secondary} 0%, #111827 100%)`, color: '#fff', display: 'flex', flexDirection: 'column', transition: 'width 0.3s', boxShadow: '4px 0 24px rgba(0,0,0,0.2)' },
-    logoArea: { padding: sidebarCollapsed ? '20px 10px' : '24px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: 14 },
-    logoIcon: { width: 44, height: 44, background: COLORS.primary, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: 20, boxShadow: '0 4px 12px rgba(227,30,36,0.4)' },
-    nav: { flex: 1, overflowY: 'auto', padding: '12px 0' },
-    navItem: (active) => ({ padding: sidebarCollapsed ? '14px' : '14px 20px', cursor: 'pointer', background: active ? COLORS.primary : 'transparent', borderRadius: sidebarCollapsed ? 10 : '0 30px 30px 0', marginRight: sidebarCollapsed ? 8 : 16, marginLeft: sidebarCollapsed ? 8 : 0, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 14, transition: 'all 0.2s', fontSize: 14, fontWeight: active ? '600' : '400', boxShadow: active ? '0 4px 12px rgba(227,30,36,0.3)' : 'none' }),
-    badge: { background: COLORS.primary, borderRadius: 12, padding: '3px 10px', fontSize: 11, fontWeight: '700', minWidth: 24, textAlign: 'center', boxShadow: '0 2px 8px rgba(227,30,36,0.4)' },
-    main: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-    header: { background: '#fff', padding: '18px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' },
-    headerIcon: { width: 48, height: 48, background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)`, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, boxShadow: '0 4px 16px rgba(227,30,36,0.3)' },
-    content: { flex: 1, padding: 28, overflowY: 'auto' },
-    card: { background: '#fff', borderRadius: 20, padding: 24, marginBottom: 24, boxShadow: '0 4px 24px rgba(0,0,0,0.06)', border: '1px solid #E5E7EB' },
-    cardTitle: { fontSize: 18, fontWeight: '700', color: COLORS.secondary, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 },
-    dashGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20 },
-    dashBox: (color) => ({ background: `linear-gradient(135deg, ${color} 0%, ${color}cc 100%)`, color: '#fff', padding: 24, borderRadius: 20, cursor: 'pointer', transition: 'all 0.3s', boxShadow: `0 8px 32px ${color}50`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 140 }),
-    formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 20 },
-    formGroup: { display: 'flex', flexDirection: 'column', gap: 8 },
-    label: { fontSize: 12, fontWeight: '700', color: COLORS.accent, textTransform: 'uppercase', letterSpacing: 0.5 },
-    input: { padding: '14px 18px', border: '2px solid #E5E7EB', borderRadius: 12, fontSize: 14, transition: 'all 0.2s', outline: 'none', width: '100%', boxSizing: 'border-box' },
-    select: { padding: '14px 18px', border: '2px solid #E5E7EB', borderRadius: 12, fontSize: 14, background: '#fff', cursor: 'pointer', outline: 'none', width: '100%', boxSizing: 'border-box' },
-    btn: (color) => ({ padding: '14px 28px', background: `linear-gradient(135deg, ${color} 0%, ${color}dd 100%)`, color: '#fff', border: 'none', borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: 10, transition: 'all 0.2s', boxShadow: `0 4px 16px ${color}40` }),
-    btnSmall: (color) => ({ padding: '10px 18px', background: color, color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: '600', transition: 'all 0.2s' }),
-    table: { width: '100%', borderCollapse: 'separate', borderSpacing: 0 },
-    th: { background: COLORS.secondary, color: '#fff', padding: '16px 18px', textAlign: 'left', fontWeight: '700', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
-    thFirst: { borderTopLeftRadius: 14 },
-    thLast: { borderTopRightRadius: 14 },
-    td: { padding: '16px 18px', borderBottom: '1px solid #E5E7EB', fontSize: 14 },
-    statusBadge: (color) => ({ display: 'inline-block', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: '700', background: `${color}15`, color: color }),
-    modal: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-    modalBox: { background: '#fff', padding: 32, borderRadius: 24, minWidth: 450, maxWidth: '90%', maxHeight: '85vh', overflow: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.25)' },
-    tabs: { display: 'flex', gap: 8, marginBottom: 24, borderBottom: '2px solid #E5E7EB', paddingBottom: 16 },
-    tab: (active) => ({ padding: '12px 24px', cursor: 'pointer', borderRadius: 10, fontSize: 14, fontWeight: active ? '700' : '500', background: active ? COLORS.primary : 'transparent', color: active ? '#fff' : COLORS.accent, transition: 'all 0.2s', boxShadow: active ? '0 4px 12px rgba(227,30,36,0.3)' : 'none' }),
-    searchBox: { display: 'flex', alignItems: 'center', background: '#F9FAFB', border: '2px solid #E5E7EB', borderRadius: 14, padding: '4px 18px', marginBottom: 20 },
-    searchInput: { border: 'none', outline: 'none', padding: '12px', fontSize: 14, flex: 1, background: 'transparent' },
-    itemsList: { background: '#F9FAFB', borderRadius: 16, padding: 20, marginBottom: 20 },
-    itemRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: '#fff', borderRadius: 14, marginBottom: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.04)' },
-    alert: (type) => ({ padding: '16px 24px', borderRadius: 14, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12, background: type === 'error' ? '#FEE2E2' : '#D1FAE5', color: type === 'error' ? COLORS.primary : COLORS.success, fontWeight: '600' })
+  // ============================================
+  // COMPONENT STATUS UPDATE
+  // ============================================
+  const updateComponentStatus = async (componentId, newStatus, additionalData = {}) => {
+    await supabase.from('request_components').update({ 
+      status: newStatus,
+      ...additionalData 
+    }).eq('id', componentId);
+    fetchAllData();
   };
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'mir', label: 'MIR', icon: '📋', count: stats.mirP },
-    { id: 'materialIn', label: 'Material IN', icon: '📥' },
-    { id: 'siteIn', label: 'Site IN', icon: '🚚', count: stats.trans },
-    { id: 'newRequest', label: 'New Request', icon: '📝' },
-    { id: 'whSite', label: 'WH Site', icon: '🏭', count: stats.site },
-    { id: 'whYard', label: 'WH Yard', icon: '🏗️', count: stats.yard },
-    { id: 'recordOut', label: 'Ready OUT', icon: '📤', count: stats.out },
-    { id: 'engineering', label: 'Engineering', icon: '🔧', count: stats.eng },
-    { id: 'spare', label: 'Spare Parts', icon: '⭐', count: stats.spare },
-    { id: 'management', label: 'Management', icon: '👔', count: stats.mng },
-    { id: 'orders', label: 'Orders', icon: '🛒', count: stats.order + stats.ordered },
-    { id: 'database', label: 'Database', icon: '🗄️' },
-    { id: 'status', label: 'Status', icon: '🔍' },
-    { id: 'movements', label: 'Movements', icon: '📜' }
-  ];
+  // ============================================
+  // SPLIT LOGIC (PT)
+  // ============================================
+  const handleSplit = async (splitData) => {
+    const { componentId, foundQty, remaining, destination } = splitData;
+    const component = components.find(c => c.id === componentId);
+    const request = requests.find(r => r.id === component.request_id);
+    
+    // Update original component with found quantity
+    await supabase.from('request_components').update({ 
+      quantity: foundQty 
+    }).eq('id', componentId);
+    
+    // Get next sub_number for split
+    const existingSplits = requests.filter(r => 
+      r.request_number === request.request_number
+    );
+    const maxSub = Math.max(...existingSplits.map(r => r.sub_number || 0), 0);
+    
+    // Create new request for remaining
+    const { data: newRequest } = await supabase.from('requests').insert({
+      request_number: request.request_number,
+      sub_number: maxSub + 1,
+      requester: request.requester,
+      badge: request.badge,
+      iso: request.iso,
+      spool: request.spool,
+      hf: request.hf,
+      category: request.category,
+      status: 'Open'
+    }).select().single();
+    
+    // Create component for split request
+    await supabase.from('request_components').insert({
+      request_id: newRequest.id,
+      material_code: component.material_code,
+      quantity: remaining,
+      description: component.description,
+      status: destination
+    });
+    
+    setSplitModal({ open: false, component: null, destinations: [] });
+    fetchAllData();
+  };
 
-  // RENDER FUNCTIONS
-  const renderDashboard = () => (
-    <div>
-      <div style={s.card}>
-        <div style={s.cardTitle}>⚡ URGENT OPERATIONS</div>
-        <div style={s.dashGrid}>
-          <div style={s.dashBox(COLORS.primary)} onClick={() => setView('mir')}><div style={{ fontSize: 42, fontWeight: '800' }}>{stats.mirP}</div><div style={{ fontSize: 14, marginTop: 8, opacity: 0.9 }}>📋 MIR Open</div></div>
-          <div style={s.dashBox('#EA580C')} onClick={() => setView('siteIn')}><div style={{ fontSize: 42, fontWeight: '800' }}>{stats.trans}</div><div style={{ fontSize: 14, marginTop: 8, opacity: 0.9 }}>🚚 In Transit</div></div>
-          <div style={s.dashBox(COLORS.success)} onClick={() => setView('recordOut')}><div style={{ fontSize: 42, fontWeight: '800' }}>{stats.out}</div><div style={{ fontSize: 14, marginTop: 8, opacity: 0.9 }}>📤 Ready OUT</div></div>
-          <div style={s.dashBox(COLORS.purple)} onClick={() => setView('engineering')}><div style={{ fontSize: 42, fontWeight: '800' }}>{stats.eng}</div><div style={{ fontSize: 14, marginTop: 8, opacity: 0.9 }}>🔧 Engineering</div></div>
-          <div style={s.dashBox('#EC4899')} onClick={() => setView('spare')}><div style={{ fontSize: 42, fontWeight: '800' }}>{stats.spare}</div><div style={{ fontSize: 14, marginTop: 8, opacity: 0.9 }}>⭐ Spare Parts</div></div>
-        </div>
-      </div>
-      <div style={s.card}>
-        <div style={s.cardTitle}>📦 WAREHOUSES & MANAGEMENT</div>
-        <div style={s.dashGrid}>
-          <div style={s.dashBox(COLORS.info)} onClick={() => setView('whSite')}><div style={{ fontSize: 42, fontWeight: '800' }}>{stats.site}</div><div style={{ fontSize: 14, marginTop: 8, opacity: 0.9 }}>🏭 WH Site</div></div>
-          <div style={s.dashBox('#CA8A04')} onClick={() => setView('whYard')}><div style={{ fontSize: 42, fontWeight: '800' }}>{stats.yard}</div><div style={{ fontSize: 14, marginTop: 8, opacity: 0.9 }}>🏗️ WH Yard</div></div>
-          <div style={s.dashBox('#0891B2')} onClick={() => setView('management')}><div style={{ fontSize: 42, fontWeight: '800' }}>{stats.mng}</div><div style={{ fontSize: 14, marginTop: 8, opacity: 0.9 }}>👔 Management</div></div>
-          <div style={s.dashBox('#F97316')} onClick={() => { setView('orders'); setOrdersTab('toOrder'); }}><div style={{ fontSize: 42, fontWeight: '800' }}>{stats.order}</div><div style={{ fontSize: 14, marginTop: 8, opacity: 0.9 }}>🛒 To Order</div></div>
-          <div style={s.dashBox(COLORS.success)} onClick={() => { setView('orders'); setOrdersTab('pending'); }}><div style={{ fontSize: 42, fontWeight: '800' }}>{stats.ordered}</div><div style={{ fontSize: 14, marginTop: 8, opacity: 0.9 }}>📦 Ordered</div></div>
-        </div>
-      </div>
-      <div style={s.card}>
-        <div style={s.cardTitle}>📈 INVENTORY SUMMARY</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
-          <div style={{ ...s.dashBox(COLORS.secondary), flexDirection: 'row', gap: 30, justifyContent: 'center' }}><div><div style={{ fontSize: 12, opacity: 0.7 }}>YARD Items</div><div style={{ fontSize: 32, fontWeight: '800' }}>{Object.keys(inventory.yard).length}</div></div><div><div style={{ fontSize: 12, opacity: 0.7 }}>Total Qty</div><div style={{ fontSize: 32, fontWeight: '800' }}>{Object.values(inventory.yard).reduce((a, b) => a + b, 0)}</div></div></div>
-          <div style={{ ...s.dashBox(COLORS.info), flexDirection: 'row', gap: 30, justifyContent: 'center' }}><div><div style={{ fontSize: 12, opacity: 0.7 }}>SITE Items</div><div style={{ fontSize: 32, fontWeight: '800' }}>{Object.keys(inventory.site).length}</div></div><div><div style={{ fontSize: 12, opacity: 0.7 }}>Total Qty</div><div style={{ fontSize: 32, fontWeight: '800' }}>{Object.values(inventory.site).reduce((a, b) => a + b, 0)}</div></div></div>
-          <div style={{ ...s.dashBox(COLORS.primary), flexDirection: 'row', gap: 30, justifyContent: 'center' }}><div><div style={{ fontSize: 12, opacity: 0.7 }}>🚫 Lost</div><div style={{ fontSize: 32, fontWeight: '800' }}>{stats.lost}</div></div><div><div style={{ fontSize: 12, opacity: 0.7 }}>💔 Broken</div><div style={{ fontSize: 32, fontWeight: '800' }}>{stats.broken}</div></div></div>
-        </div>
-      </div>
-      <div style={s.card}>
-        <div style={s.cardTitle}>🚀 QUICK ACTIONS</div>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <button style={s.btn(COLORS.primary)} onClick={() => setView('newRequest')}>📝 New Request</button>
-          <button style={s.btn(COLORS.success)} onClick={() => setView('materialIn')}>📥 Load Material</button>
-          <button style={s.btn(COLORS.info)} onClick={() => setModal('balance')}>⚖️ Inventory Adjustment</button>
-          <button style={s.btn(COLORS.purple)} onClick={() => setView('status')}>🔍 Track Request</button>
-        </div>
-      </div>
-    </div>
-  );
+  // ============================================
+  // WH SITE ACTIONS
+  // ============================================
+  const handleSiteConfirm = async (component) => {
+    const siteQty = getInventoryQty(component.material_code, 'SITE');
+    if (siteQty < component.quantity) {
+      alert('Inventario Site insufficiente!');
+      return;
+    }
+    
+    await updateInventory(component.material_code, 'SITE', -component.quantity);
+    await recordMovement('OUT', 'SITE', component.material_code, component.quantity, 'Ready for delivery');
+    
+    const request = requests.find(r => r.id === component.request_id);
+    await supabase.from('ready_out').insert({
+      request_id: component.request_id,
+      component_id: component.id,
+      request_number: request ? `${request.request_number}-${request.sub_number || 0}` : '',
+      requester: request?.requester,
+      badge: request?.badge,
+      iso: request?.iso,
+      spool: request?.spool,
+      material_code: component.material_code,
+      quantity: component.quantity,
+      description: component.description
+    });
+    
+    await updateComponentStatus(component.id, 'Out');
+  };
 
-  const renderNewRequest = () => (
-    <div style={s.card}>
-      <div style={s.cardTitle}>📝 CREATE NEW REQUEST</div>
-      <div style={s.formGrid}>
-        <div style={s.formGroup}><label style={s.label}>Requester Name *</label><input style={s.input} value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Enter name" /></div>
-        <div style={s.formGroup}><label style={s.label}>Badge Number *</label><input style={s.input} value={form.badge} onChange={e => setForm({...form, badge: e.target.value})} placeholder="Enter badge" /></div>
-        <div style={s.formGroup}><label style={s.label}>ISO Drawing *</label><input style={s.input} value={form.iso} onChange={e => setForm({...form, iso: e.target.value})} placeholder="e.g., ISO-001" /></div>
-        <div style={s.formGroup}><label style={s.label}>Spool Number *</label><input style={s.input} value={form.spool} onChange={e => setForm({...form, spool: e.target.value})} placeholder="e.g., SP-001" /></div>
-        <div style={s.formGroup}><label style={s.label}>Category</label><select style={s.select} value={form.cat} onChange={e => setForm({...form, cat: e.target.value})}><option>Bulk</option><option>Erection</option></select></div>
-        {form.cat === 'Erection' && <div style={s.formGroup}><label style={s.label}>HF Number *</label><input style={s.input} value={form.hf} onChange={e => setForm({...form, hf: e.target.value})} placeholder="Enter HF number" /></div>}
-      </div>
-      <div style={{ marginTop: 28, marginBottom: 20 }}>
-        <div style={s.cardTitle}>➕ ADD MATERIALS</div>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div style={{ ...s.formGroup, flex: 2, minWidth: 200 }}><label style={s.label}>Material Code</label><select style={s.select} value={itemForm.code} onChange={e => setItemForm({...itemForm, code: e.target.value})}><option value="">-- Select Material --</option>{Object.entries(materials).map(([code, desc]) => (<option key={code} value={code}>{code} - {desc}</option>))}</select></div>
-          <div style={{ ...s.formGroup, flex: 1, minWidth: 100 }}><label style={s.label}>Quantity</label><input style={s.input} type="number" value={itemForm.qty} onChange={e => setItemForm({...itemForm, qty: e.target.value})} placeholder="Qty" /></div>
-          <button style={s.btn(COLORS.success)} onClick={addItemToRequest}>➕ Add</button>
-        </div>
-      </div>
-      {requestItems.length > 0 && <div style={s.itemsList}><div style={{ fontWeight: '700', marginBottom: 16, fontSize: 16 }}>📦 Items in Request ({requestItems.length})</div>{requestItems.map(item => (<div key={item.id} style={s.itemRow}><div><strong style={{ fontSize: 16 }}>{item.code}</strong><div style={{ fontSize: 13, color: COLORS.accent }}>{item.desc}</div></div><div style={{ display: 'flex', alignItems: 'center', gap: 20 }}><span style={{ fontWeight: '700', fontSize: 20 }}>×{item.qty}</span><button style={{ ...s.btnSmall(COLORS.primary), padding: '8px 14px' }} onClick={() => removeItemFromRequest(item.id)}>✕</button></div></div>))}</div>}
-      <div style={{ display: 'flex', gap: 16, marginTop: 28 }}>
-        <button style={s.btn(COLORS.purple)} onClick={() => submitRequest('Eng')} disabled={requestItems.length === 0}>🔧 Send to Engineering</button>
-        <button style={s.btn(COLORS.info)} onClick={() => submitRequest('Site')} disabled={requestItems.length === 0}>🏭 Direct to Site</button>
-        <button style={s.btn('#CA8A04')} onClick={() => submitRequest('Yard')} disabled={requestItems.length === 0}>🏗️ Direct to Yard</button>
-      </div>
-    </div>
-  );
+  const handleSiteToYard = async (component) => {
+    await updateComponentStatus(component.id, 'Yard');
+  };
 
-  const renderWarehouse = (type) => {
-    const items = requests.flatMap(r => r.comp.filter(c => c.st === type).map(c => ({ ...c, req: r })));
-    const inv = type === 'Site' ? inventory.site : inventory.yard;
+  const handleSiteToUT = async (component) => {
+    await updateComponentStatus(component.id, 'UT');
+  };
+
+  // ============================================
+  // WH YARD ACTIONS
+  // ============================================
+  const handleYardConfirm = async (component) => {
+    const yardQty = getInventoryQty(component.material_code, 'YARD');
+    if (yardQty < component.quantity) {
+      alert('Inventario Yard insufficiente!');
+      return;
+    }
+    
+    await updateInventory(component.material_code, 'YARD', -component.quantity);
+    await updateInventory(component.material_code, 'INTRANSIT', component.quantity);
+    await recordMovement('TRF', 'YARD→SITE', component.material_code, component.quantity, 'Transfer to Site');
+    await updateComponentStatus(component.id, 'Trans');
+  };
+
+  const handleYardReturn = async (component) => {
+    await updateComponentStatus(component.id, 'Site');
+  };
+
+  const handleYardToUT = async (component) => {
+    await updateComponentStatus(component.id, 'UT');
+  };
+
+  // ============================================
+  // SITE IN ACTIONS
+  // ============================================
+  const handleSiteInConfirm = async (component) => {
+    await updateInventory(component.material_code, 'INTRANSIT', -component.quantity);
+    await updateInventory(component.material_code, 'SITE', component.quantity);
+    await recordMovement('IN', 'SITE', component.material_code, component.quantity, 'Received from Yard');
+    await updateComponentStatus(component.id, 'Site');
+  };
+
+  const handleSiteInReject = async (component) => {
+    await updateInventory(component.material_code, 'INTRANSIT', -component.quantity);
+    await updateInventory(component.material_code, 'YARD', component.quantity);
+    await updateComponentStatus(component.id, 'Yard');
+  };
+
+  // ============================================
+  // ENGINEERING ACTIONS
+  // ============================================
+  const handleUTConfirm = async (component) => {
+    const request = requests.find(r => r.id === component.request_id);
+    await supabase.from('ready_out').insert({
+      request_id: component.request_id,
+      component_id: component.id,
+      request_number: request ? `${request.request_number}-${request.sub_number || 0}` : '',
+      requester: request?.requester,
+      badge: request?.badge,
+      iso: request?.iso,
+      spool: request?.spool,
+      material_code: component.material_code,
+      quantity: component.quantity,
+      description: component.description
+    });
+    await updateComponentStatus(component.id, 'Out');
+  };
+
+  const handleUTToSpare = async (component) => {
+    await updateComponentStatus(component.id, 'Spare');
+  };
+
+  const handleUTToMng = async (component) => {
+    await updateComponentStatus(component.id, 'Mng');
+  };
+
+  const handleUTSendNote = async (component, noteText, destination) => {
+    await updateComponentStatus(component.id, 'UTCheck', {
+      ut_note: noteText,
+      sent_to: destination
+    });
+    setNoteModal({ open: false, component: null });
+  };
+
+  const handleUTReturn = async (component) => {
+    const returnTo = component.sent_to === 'Yard' ? 'Yard' : 'Site';
+    await updateComponentStatus(component.id, returnTo);
+  };
+
+  // ============================================
+  // SPARE PARTS ACTIONS
+  // ============================================
+  const handleSpareConfirm = async (component) => {
+    const request = requests.find(r => r.id === component.request_id);
+    await supabase.from('ready_out').insert({
+      request_id: component.request_id,
+      component_id: component.id,
+      request_number: request ? `${request.request_number}-${request.sub_number || 0}` : '',
+      requester: request?.requester,
+      badge: request?.badge,
+      material_code: component.material_code,
+      quantity: component.quantity,
+      description: component.description
+    });
+    await updateComponentStatus(component.id, 'Out');
+  };
+
+  const handleSpareToOrder = async (component) => {
+    await updateComponentStatus(component.id, 'Order');
+  };
+
+  // ============================================
+  // MANAGEMENT ACTIONS
+  // ============================================
+  const handleMngInternal = async (component) => {
+    await updateComponentStatus(component.id, 'Order', { order_type: 'Internal' });
+  };
+
+  const handleMngClient = async (component) => {
+    await updateComponentStatus(component.id, 'Order', { order_type: 'Client' });
+  };
+
+  // ============================================
+  // ORDERS ACTIONS
+  // ============================================
+  const handleOrderPurchase = async (orderData) => {
+    const { componentId, qty, orderDate, forecastDate } = orderData;
+    const component = components.find(c => c.id === componentId);
+    
+    await supabase.from('order_log').insert({
+      request_id: component.request_id,
+      component_id: componentId,
+      material_code: component.material_code,
+      quantity_ordered: qty,
+      order_date: orderDate,
+      forecast_date: forecastDate,
+      order_type: component.order_type || 'Internal',
+      status: 'Ordered'
+    });
+    
+    await updateComponentStatus(componentId, 'Ordered', {
+      purchase_qty: qty,
+      purchase_date: orderDate,
+      purchase_forecast: forecastDate
+    });
+    
+    setOrderModal({ open: false, component: null });
+  };
+
+  const handleOrderArrived = async (component) => {
+    await updateInventory(component.material_code, 'SITE', component.purchase_qty || component.quantity);
+    await recordMovement('IN', 'SITE', component.material_code, component.purchase_qty || component.quantity, 'Order arrived');
+    
+    await supabase.from('order_log').update({ 
+      status: 'Arrived',
+      arrived_date: new Date().toISOString().split('T')[0]
+    }).eq('component_id', component.id);
+    
+    await updateComponentStatus(component.id, 'Site');
+  };
+
+  // ============================================
+  // READY OUT ACTIONS
+  // ============================================
+  const handleReadyOutDeliver = async (item) => {
+    await supabase.from('delivered').insert({
+      request_id: item.request_id,
+      component_id: item.component_id,
+      request_number: item.request_number,
+      requester: item.requester,
+      badge: item.badge,
+      iso: item.iso,
+      spool: item.spool,
+      material_code: item.material_code,
+      quantity: item.quantity,
+      description: item.description
+    });
+    
+    await recordMovement('OUT', 'SITE', item.material_code, item.quantity, 'Delivered', item.request_number);
+    await updateComponentStatus(item.component_id, 'Done');
+    await supabase.from('ready_out').delete().eq('id', item.id);
+    fetchAllData();
+  };
+
+  const handleReadyOutCancel = async (item) => {
+    await updateInventory(item.material_code, 'SITE', item.quantity);
+    await updateComponentStatus(item.component_id, 'Site');
+    await supabase.from('ready_out').delete().eq('id', item.id);
+    fetchAllData();
+  };
+
+  // ============================================
+  // MOVEMENT ACTIONS
+  // ============================================
+  const handleNewMovement = async (movementData) => {
+    const { movementType, location, materialCode, quantity, note } = movementData;
+    
+    await recordMovement(movementType, location, materialCode, quantity, note);
+    
+    if (movementType === 'IN' || movementType === 'BAL') {
+      await updateInventory(materialCode, location, quantity);
+    } else if (movementType === 'OUT' || movementType === 'LOST' || movementType === 'BROKEN') {
+      await updateInventory(materialCode, location, -quantity);
+    }
+    
+    setMovementModal({ open: false });
+    fetchAllData();
+  };
+
+  // ============================================
+  // DELETE COMPONENT
+  // ============================================
+  const handleDeleteComponent = async (componentId) => {
+    await supabase.from('request_components').delete().eq('id', componentId);
+    setConfirmModal({ open: false, message: '', onConfirm: null });
+    fetchAllData();
+  };
+
+  // ============================================
+  // NEW REQUEST
+  // ============================================
+  const handleNewRequest = async (requestData) => {
+    const { data: counterData } = await supabase
+      .from('counters')
+      .select('current_value')
+      .eq('counter_name', 'request')
+      .single();
+    
+    let nextNumber = 1001;
+    if (counterData) {
+      nextNumber = counterData.current_value + 1;
+      await supabase.from('counters').update({ current_value: nextNumber }).eq('counter_name', 'request');
+    } else {
+      await supabase.from('counters').insert({ counter_name: 'request', current_value: nextNumber });
+    }
+    
+    const { data: newRequest } = await supabase.from('requests').insert({
+      request_number: nextNumber.toString(),
+      sub_number: 0,
+      requester: requestData.requester,
+      badge: requestData.badge,
+      iso: requestData.iso,
+      spool: requestData.spool,
+      hf: requestData.hf,
+      category: requestData.category
+    }).select().single();
+    
+    for (const comp of requestData.components) {
+      await supabase.from('request_components').insert({
+        request_id: newRequest.id,
+        material_code: comp.material_code,
+        quantity: parseInt(comp.quantity),
+        description: comp.description,
+        status: 'Site'
+      });
+    }
+    
+    setNewRequestModal(false);
+    fetchAllData();
+  };
+
+  // ============================================
+  // RENDER HELPERS
+  // ============================================
+  const getRequestDisplay = (component) => {
+    const request = requests.find(r => r.id === component.request_id);
+    if (!request) return 'N/A';
+    return `${request.request_number}-${request.sub_number || 0}`;
+  };
+
+  const getRequestInfo = (component) => {
+    return requests.find(r => r.id === component.request_id);
+  };
+
+  // Filter components by status
+  const siteComponents = components.filter(c => c.status === 'Site');
+  const yardComponents = components.filter(c => c.status === 'Yard');
+  const transComponents = components.filter(c => c.status === 'Trans');
+  const utComponents = components.filter(c => c.status === 'UT');
+  const utCheckComponents = components.filter(c => c.status === 'UTCheck');
+  const spareComponents = components.filter(c => c.status === 'Spare');
+  const mngComponents = components.filter(c => c.status === 'Mng');
+  const orderComponents = components.filter(c => c.status === 'Order');
+  const orderedComponents = components.filter(c => c.status === 'Ordered');
+
+  // Calculate inventory totals
+  const totalYard = inventory.filter(i => i.location === 'YARD').reduce((sum, i) => sum + (i.quantity || 0), 0);
+  const totalSite = inventory.filter(i => i.location === 'SITE').reduce((sum, i) => sum + (i.quantity || 0), 0);
+  const totalLost = movements.filter(m => m.movement_type === 'LOST').reduce((sum, m) => sum + (m.quantity || 0), 0);
+  const totalBroken = movements.filter(m => m.movement_type === 'BROKEN').reduce((sum, m) => sum + (m.quantity || 0), 0);
+
+  // ============================================
+  // LOGIN SCREEN
+  // ============================================
+  if (!isAuthenticated) {
     return (
-      <div>
-        <div style={s.card}>
-          <div style={s.cardTitle}>{type === 'Site' ? '🏭' : '🏗️'} WAREHOUSE {type.toUpperCase()} - Pending Requests</div>
-          {items.length === 0 ? <div style={{ textAlign: 'center', padding: 50, color: COLORS.accent, fontSize: 16 }}>✅ No pending requests</div> : (
-            <table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Request</th><th style={s.th}>Requester</th><th style={s.th}>Code</th><th style={s.th}>Description</th><th style={s.th}>Qty</th><th style={s.th}>Available</th><th style={{ ...s.th, ...s.thLast }}>Actions</th></tr></thead>
-              <tbody>{items.map((item, idx) => { const avail = inv[item.code] || 0; const canFulfill = avail >= item.qty; return (<tr key={idx}><td style={s.td}><strong>{formatReqNum(item.req.num, item.req.sub)}</strong></td><td style={s.td}>{item.req.name}</td><td style={s.td}>{item.code}</td><td style={s.td}>{item.desc}</td><td style={s.td}><strong>{item.qty}</strong></td><td style={s.td}><span style={s.statusBadge(canFulfill ? COLORS.success : COLORS.primary)}>{avail}</span></td><td style={s.td}>{canFulfill ? <button style={s.btnSmall(COLORS.success)} onClick={() => moveToOut(item.req, item)}>📤 Prepare OUT</button> : type === 'Yard' ? <button style={s.btnSmall(COLORS.info)} onClick={() => transferToSite(item.req, item)} disabled={avail < item.qty}>🚚 Transfer</button> : <span style={{ color: COLORS.primary, fontSize: 13 }}>⚠️ Insufficient</span>}</td></tr>); })}</tbody></table>
-          )}
-        </div>
-        <div style={s.card}>
-          <div style={s.cardTitle}>📦 Current Inventory - {type}</div>
-          <div style={s.searchBox}><span>🔍</span><input style={s.searchInput} placeholder="Search materials..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-          <table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Code</th><th style={s.th}>Description</th><th style={{ ...s.th, ...s.thLast }}>Quantity</th></tr></thead>
-            <tbody>{Object.entries(inv).filter(([code]) => !search || code.toLowerCase().includes(search.toLowerCase()) || (materials[code] || '').toLowerCase().includes(search.toLowerCase())).map(([code, qty]) => (<tr key={code}><td style={s.td}><strong>{code}</strong></td><td style={s.td}>{materials[code] || '-'}</td><td style={s.td}><span style={s.statusBadge(qty > 0 ? COLORS.success : COLORS.accent)}>{qty}</span></td></tr>))}</tbody></table>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: COLORS.background }}>
+        <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+          <div className="flex items-center justify-center mb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center" style={{ backgroundColor: COLORS.primary, width: 56, height: 56, borderRadius: 12 }}>
+                <span className="text-white font-bold text-3xl">S</span>
+              </div>
+              <div>
+                <div className="font-bold text-xl" style={{ color: COLORS.secondary }}>STREICHER</div>
+                <div className="text-gray-500 text-sm">Materials Manager V25</div>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                placeholder="Inserisci password..."
+              />
+            </div>
+            <button
+              onClick={handleLogin}
+              className="w-full py-2 px-4 text-white font-medium rounded-lg transition-colors hover:opacity-90"
+              style={{ backgroundColor: COLORS.primary }}
+            >
+              Accedi
+            </button>
+          </div>
         </div>
       </div>
     );
-  };
+  }
 
-  const renderSiteIn = () => { const transitItems = requests.flatMap(r => r.comp.filter(c => c.st === 'Trans').map(c => ({ ...c, req: r }))); return (<div style={s.card}><div style={s.cardTitle}>🚚 MATERIALS IN TRANSIT</div>{transitItems.length === 0 ? <div style={{ textAlign: 'center', padding: 50, color: COLORS.accent, fontSize: 16 }}>✅ No materials in transit</div> : (<table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Request</th><th style={s.th}>Code</th><th style={s.th}>Description</th><th style={s.th}>Quantity</th><th style={{ ...s.th, ...s.thLast }}>Actions</th></tr></thead><tbody>{transitItems.map((item, idx) => (<tr key={idx}><td style={s.td}><strong>{formatReqNum(item.req.num, item.req.sub)}</strong></td><td style={s.td}>{item.code}</td><td style={s.td}>{item.desc}</td><td style={s.td}><strong>{item.qty}</strong></td><td style={s.td}><button style={s.btnSmall(COLORS.success)} onClick={() => confirmArrival(item.req, item)}>✅ Confirm Arrival</button></td></tr>))}</tbody></table>)}</div>); };
+  // ============================================
+  // SIDEBAR NAVIGATION
+  // ============================================
+  const menuItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'newRequest', label: 'Nuova Richiesta', icon: '➕' },
+    { id: 'whSite', label: 'WH Site', icon: '🏭', count: siteComponents.length },
+    { id: 'whYard', label: 'WH Yard', icon: '🏗️', count: yardComponents.length },
+    { id: 'siteIn', label: 'Site IN', icon: '📥', count: transComponents.length },
+    { id: 'engineering', label: 'Engineering', icon: '⚙️', count: utComponents.length + utCheckComponents.length },
+    { id: 'spareParts', label: 'Spare Parts', icon: '🔧', count: spareComponents.length },
+    { id: 'management', label: 'Management', icon: '📋', count: mngComponents.length },
+    { id: 'orders', label: 'Orders', icon: '🛒', count: orderComponents.length + orderedComponents.length },
+    { id: 'readyOut', label: 'Ready OUT', icon: '📤', count: readyOut.length },
+    { id: 'delivered', label: 'Delivered', icon: '✅', count: delivered.length },
+    { id: 'movements', label: 'Movements', icon: '↔️' },
+    { id: 'inventory', label: 'Inventory', icon: '📦' },
+    { id: 'status', label: 'Status', icon: '🔍' },
+  ];
 
-  const renderRecordOut = () => (<div style={s.card}><div style={s.cardTitle}>📤 READY FOR PICKUP</div>{readyOut.length === 0 ? <div style={{ textAlign: 'center', padding: 50, color: COLORS.accent, fontSize: 16 }}>✅ No materials ready</div> : (<table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Request</th><th style={s.th}>Requester</th><th style={s.th}>Badge</th><th style={s.th}>Code</th><th style={s.th}>Qty</th><th style={s.th}>Location</th><th style={{ ...s.th, ...s.thLast }}>Actions</th></tr></thead><tbody>{readyOut.map(item => (<tr key={item.id}><td style={s.td}><strong>{item.reqNum}</strong></td><td style={s.td}>{item.name}</td><td style={s.td}>{item.badge}</td><td style={s.td}>{item.code}</td><td style={s.td}><strong>{item.qty}</strong></td><td style={s.td}><span style={s.statusBadge(COLORS.info)}>{item.loc}</span></td><td style={s.td}><button style={s.btnSmall(COLORS.success)} onClick={() => deliverMaterial(item)}>✅ Deliver</button></td></tr>))}</tbody></table>)}</div>);
-
-  const renderMIR = () => (<div><div style={s.card}><div style={s.cardTitle}>📋 REGISTER NEW MIR</div><div style={s.formGrid}><div style={s.formGroup}><label style={s.label}>MIR Number *</label><input style={s.input} value={mirForm.mir} onChange={e => setMirForm({...mirForm, mir: e.target.value})} placeholder="e.g., MIR-001" /></div><div style={s.formGroup}><label style={s.label}>RK Number *</label><input style={s.input} value={mirForm.rk} onChange={e => setMirForm({...mirForm, rk: e.target.value})} placeholder="e.g., RK-001" /></div><div style={s.formGroup}><label style={s.label}>Forecast Date</label><input style={s.input} type="date" value={mirForm.forecast} onChange={e => setMirForm({...mirForm, forecast: e.target.value})} /></div><div style={s.formGroup}><label style={s.label}>Priority</label><select style={s.select} value={mirForm.priority} onChange={e => setMirForm({...mirForm, priority: e.target.value})}><option>Low</option><option>Medium</option><option>High</option><option>Urgent</option></select></div></div><button style={s.btn(COLORS.primary)} onClick={addMIR}>➕ Register MIR</button></div><div style={s.card}><div style={s.cardTitle}>📋 PENDING MIRs</div>{mirs.filter(m => m.status === 'Pending').length === 0 ? <div style={{ textAlign: 'center', padding: 50, color: COLORS.accent }}>✅ No pending MIRs</div> : (<table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>MIR</th><th style={s.th}>RK</th><th style={s.th}>Priority</th><th style={s.th}>Forecast</th><th style={{ ...s.th, ...s.thLast }}>Status</th></tr></thead><tbody>{mirs.filter(m => m.status === 'Pending').map(mir => (<tr key={mir.id}><td style={s.td}><strong>{mir.mir}</strong></td><td style={s.td}>{mir.rk}</td><td style={s.td}><span style={s.statusBadge(mir.priority === 'Urgent' ? COLORS.primary : mir.priority === 'High' ? COLORS.warning : COLORS.success)}>{mir.priority}</span></td><td style={s.td}>{formatDate(mir.forecast)}</td><td style={s.td}><span style={s.statusBadge(COLORS.warning)}>Pending</span></td></tr>))}</tbody></table>)}</div></div>);
-
-  const renderMaterialIn = () => (<div style={s.card}><div style={s.cardTitle}>📥 LOAD MATERIALS TO YARD</div><div style={s.formGrid}><div style={s.formGroup}><label style={s.label}>Material Code *</label><select style={s.select} value={loadForm.code} onChange={e => setLoadForm({...loadForm, code: e.target.value})}><option value="">-- Select Material --</option>{Object.entries(materials).map(([code, desc]) => (<option key={code} value={code}>{code} - {desc}</option>))}</select></div><div style={s.formGroup}><label style={s.label}>Quantity *</label><input style={s.input} type="number" value={loadForm.qty} onChange={e => setLoadForm({...loadForm, qty: e.target.value})} placeholder="Enter quantity" /></div><div style={s.formGroup}><label style={s.label}>MIR Reference</label><select style={s.select} value={loadForm.mir} onChange={e => setLoadForm({...loadForm, mir: e.target.value})}><option value="">-- Select MIR --</option>{mirs.filter(m => m.status === 'Pending').map(mir => (<option key={mir.id} value={mir.mir}>{mir.mir} - {mir.rk}</option>))}</select></div><div style={s.formGroup}><label style={s.label}>RK Number</label><input style={s.input} value={loadForm.rk} onChange={e => setLoadForm({...loadForm, rk: e.target.value})} placeholder="RK number" /></div></div><button style={s.btn(COLORS.success)} onClick={loadMaterial}>📥 Load to YARD</button></div>);
-
-  const renderEngineering = () => { const engItems = requests.flatMap(r => r.comp.filter(c => c.st === 'Eng').map(c => ({ ...c, req: r }))); return (<div style={s.card}><div style={s.cardTitle}>🔧 ENGINEERING REVIEW</div>{engItems.length === 0 ? <div style={{ textAlign: 'center', padding: 50, color: COLORS.accent }}>✅ No items pending</div> : (<table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Request</th><th style={s.th}>ISO/Spool</th><th style={s.th}>Code</th><th style={s.th}>Description</th><th style={s.th}>Qty</th><th style={{ ...s.th, ...s.thLast }}>Actions</th></tr></thead><tbody>{engItems.map((item, idx) => (<tr key={idx}><td style={s.td}><strong>{formatReqNum(item.req.num, item.req.sub)}</strong></td><td style={s.td}>{item.req.iso} / {item.req.spool}</td><td style={s.td}>{item.code}</td><td style={s.td}>{item.desc}</td><td style={s.td}><strong>{item.qty}</strong></td><td style={s.td}><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><button style={s.btnSmall(COLORS.info)} onClick={() => engSendTo(item.req, item, 'Site', 'Standard')}>🏭 Site</button><button style={s.btnSmall('#CA8A04')} onClick={() => engSendTo(item.req, item, 'Yard', 'Standard')}>🏗️ Yard</button><button style={s.btnSmall(COLORS.purple)} onClick={() => engSendTo(item.req, item, 'Mng', 'Special')}>👔 Mng</button><button style={s.btnSmall('#EC4899')} onClick={() => engSendTo(item.req, item, 'Spare', 'Spare')}>⭐ Spare</button></div></td></tr>))}</tbody></table>)}</div>); };
-
-  const renderManagement = () => { const mngItems = requests.flatMap(r => r.comp.filter(c => c.st === 'Mng').map(c => ({ ...c, req: r }))); return (<div style={s.card}><div style={s.cardTitle}>👔 MANAGEMENT DECISIONS</div>{mngItems.length === 0 ? <div style={{ textAlign: 'center', padding: 50, color: COLORS.accent }}>✅ No items pending</div> : (<table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Request</th><th style={s.th}>Code</th><th style={s.th}>Description</th><th style={s.th}>Qty</th><th style={s.th}>Eng. Category</th><th style={{ ...s.th, ...s.thLast }}>Actions</th></tr></thead><tbody>{mngItems.map((item, idx) => (<tr key={idx}><td style={s.td}><strong>{formatReqNum(item.req.num, item.req.sub)}</strong></td><td style={s.td}>{item.code}</td><td style={s.td}>{item.desc}</td><td style={s.td}><strong>{item.qty}</strong></td><td style={s.td}><span style={s.statusBadge(COLORS.purple)}>{item.engCat || '-'}</span></td><td style={s.td}><div style={{ display: 'flex', gap: 6 }}><button style={s.btnSmall(COLORS.success)} onClick={() => mngSendTo(item.req, item, 'Site')}>✅ Approve</button><button style={s.btnSmall(COLORS.warning)} onClick={() => mngSendTo(item.req, item, 'Order')}>🛒 Order</button></div></td></tr>))}</tbody></table>)}</div>); };
-
-  const renderSpare = () => { const spareItems = requests.flatMap(r => r.comp.filter(c => c.st === 'Spare').map(c => ({ ...c, req: r }))); return (<div style={s.card}><div style={s.cardTitle}>⭐ SPARE PARTS</div>{spareItems.length === 0 ? <div style={{ textAlign: 'center', padding: 50, color: COLORS.accent }}>✅ No spare parts pending</div> : (<table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Request</th><th style={s.th}>Code</th><th style={s.th}>Description</th><th style={s.th}>Qty</th><th style={{ ...s.th, ...s.thLast }}>Actions</th></tr></thead><tbody>{spareItems.map((item, idx) => (<tr key={idx}><td style={s.td}><strong>{formatReqNum(item.req.num, item.req.sub)}</strong></td><td style={s.td}>{item.code}</td><td style={s.td}>{item.desc}</td><td style={s.td}><strong>{item.qty}</strong></td><td style={s.td}><button style={s.btnSmall(COLORS.success)} onClick={() => mngSendTo(item.req, item, 'Site')}>✅ Send to Site</button></td></tr>))}</tbody></table>)}</div>); };
-
-  const renderMovements = () => (<div style={s.card}><div style={s.cardTitle}>📜 MOVEMENT HISTORY</div><div style={s.searchBox}><span>🔍</span><input style={s.searchInput} placeholder="Search movements..." value={movSearch} onChange={e => setMovSearch(e.target.value)} /></div><table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Date</th><th style={s.th}>Type</th><th style={s.th}>Location</th><th style={s.th}>Code</th><th style={s.th}>Qty</th><th style={{ ...s.th, ...s.thLast }}>Note</th></tr></thead><tbody>{movements.filter(m => !movSearch || m.code?.toLowerCase().includes(movSearch.toLowerCase()) || m.type?.toLowerCase().includes(movSearch.toLowerCase())).slice(0, 50).map(m => (<tr key={m.id}><td style={s.td}>{formatDateTime(m.d)}</td><td style={s.td}><span style={s.statusBadge(m.type === 'IN' ? COLORS.success : m.type === 'OUT' ? COLORS.primary : m.type === 'BAL' ? COLORS.warning : COLORS.info)}>{m.type}</span></td><td style={s.td}>{m.loc}</td><td style={s.td}><strong>{m.code}</strong></td><td style={s.td}>{m.qty}</td><td style={s.td}>{m.note || m.ref || '-'}</td></tr>))}</tbody></table></div>);
-
-  const renderDatabase = () => (<div>{!dbUnlocked ? (<div style={s.card}><div style={s.cardTitle}>🔐 DATABASE ACCESS</div><p style={{ marginBottom: 20, color: COLORS.accent }}>Enter password to access the database.</p><div style={{ display: 'flex', gap: 16 }}><input style={{ ...s.input, maxWidth: 300 }} type="password" value={pwdInput} onChange={e => setPwdInput(e.target.value)} placeholder="Enter password" onKeyDown={e => e.key === 'Enter' && checkPwd()} /><button style={s.btn(COLORS.primary)} onClick={checkPwd}>🔓 Unlock</button></div></div>) : (<div style={s.card}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}><div style={s.cardTitle}>🗄️ PROJECT DATABASE</div><button style={s.btnSmall(COLORS.accent)} onClick={() => setDbUnlocked(false)}>🔒 Lock</button></div><div style={s.searchBox}><span>🔍</span><input style={s.searchInput} placeholder="Search database..." value={search} onChange={e => setSearch(e.target.value)} /></div><table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Code</th><th style={s.th}>Description</th><th style={s.th}>Project Qty</th><th style={s.th}>TEN Qty</th><th style={{ ...s.th, ...s.thLast }}>OUT Qty</th></tr></thead><tbody>{projectDb.filter(p => !search || p.code.toLowerCase().includes(search.toLowerCase()) || (p.desc || '').toLowerCase().includes(search.toLowerCase())).map(p => (<tr key={p.id}><td style={s.td}><strong>{p.code}</strong></td><td style={s.td}>{p.desc}</td><td style={s.td}>{editCell?.code === p.code && editCell?.field === 'project' ? (<input style={{ ...s.input, width: 80 }} value={editVal} onChange={e => setEditVal(e.target.value)} />) : (<span onClick={() => startEdit(p.code, 'project', p.project)} style={{ cursor: 'pointer' }}>{p.project}</span>)}</td><td style={s.td}>{editCell?.code === p.code && editCell?.field === 'ten' ? (<input style={{ ...s.input, width: 80 }} value={editVal} onChange={e => setEditVal(e.target.value)} />) : (<span onClick={() => startEdit(p.code, 'ten', p.ten)} style={{ cursor: 'pointer' }}>{p.ten}</span>)}</td><td style={s.td}>{p.out}</td></tr>))}</tbody></table>{editCell && (<div style={{ marginTop: 20, padding: 20, background: '#F9FAFB', borderRadius: 14 }}><div style={{ marginBottom: 12 }}><strong>Editing:</strong> {editCell.code} - {editCell.field}</div><div style={s.formGroup}><label style={s.label}>Reason for change *</label><input style={s.input} value={editReason} onChange={e => setEditReason(e.target.value)} placeholder="Enter reason" /></div><div style={{ display: 'flex', gap: 12, marginTop: 16 }}><button style={s.btnSmall(COLORS.success)} onClick={saveEdit}>✅ Save</button><button style={s.btnSmall(COLORS.accent)} onClick={() => setEditCell(null)}>Cancel</button></div></div>)}</div>)}</div>);
-
-  const renderStatus = () => (<div style={s.card}><div style={s.cardTitle}>🔍 REQUEST STATUS TRACKER</div><div style={s.formGrid}><div style={s.formGroup}><label style={s.label}>Request Number</label><input style={s.input} value={statusFilters.num} onChange={e => setStatusFilters({...statusFilters, num: e.target.value})} placeholder="e.g., 1001" /></div><div style={s.formGroup}><label style={s.label}>Requester Name</label><input style={s.input} value={statusFilters.name} onChange={e => setStatusFilters({...statusFilters, name: e.target.value})} placeholder="Search by name" /></div><div style={s.formGroup}><label style={s.label}>Material Code</label><input style={s.input} value={statusFilters.code} onChange={e => setStatusFilters({...statusFilters, code: e.target.value})} placeholder="Search by code" /></div><div style={s.formGroup}><label style={s.label}>HF Number</label><input style={s.input} value={statusFilters.hf} onChange={e => setStatusFilters({...statusFilters, hf: e.target.value})} placeholder="Search by HF" /></div></div><table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Request</th><th style={s.th}>Date</th><th style={s.th}>Requester</th><th style={s.th}>ISO/Spool</th><th style={s.th}>HF</th><th style={s.th}>Code</th><th style={s.th}>Qty</th><th style={{ ...s.th, ...s.thLast }}>Status</th></tr></thead><tbody>{requests.filter(r => { if (statusFilters.num && !r.num.toString().includes(statusFilters.num)) return false; if (statusFilters.name && !r.name.toLowerCase().includes(statusFilters.name.toLowerCase())) return false; if (statusFilters.hf && !(r.hf || '').toLowerCase().includes(statusFilters.hf.toLowerCase())) return false; if (statusFilters.code && !r.comp.some(c => c.code.toLowerCase().includes(statusFilters.code.toLowerCase()))) return false; return true; }).slice(0, 50).flatMap(r => r.comp.map(c => ({ ...c, req: r }))).map((item, idx) => (<tr key={idx}><td style={s.td}><strong>{formatReqNum(item.req.num, item.req.sub)}</strong></td><td style={s.td}>{formatDate(item.req.date)}</td><td style={s.td}>{item.req.name}</td><td style={s.td}>{item.req.iso} / {item.req.spool}</td><td style={s.td}>{item.req.hf || '-'}</td><td style={s.td}>{item.code}</td><td style={s.td}>{item.qty}</td><td style={s.td}><span style={s.statusBadge(item.st === 'Done' ? COLORS.success : item.st === 'Eng' ? COLORS.purple : item.st === 'Mng' ? COLORS.info : item.st === 'Trans' ? COLORS.warning : item.st === 'Out' ? COLORS.success : COLORS.accent)}>{item.st}</span></td></tr>))}</tbody></table></div>);
-
-  const renderOrders = () => { const toOrder = requests.flatMap(r => r.comp.filter(c => c.st === 'Order').map(c => ({ ...c, req: r }))); const pending = orderLog.filter(o => o.status === 'Pending'); return (<div><div style={s.tabs}><div style={s.tab(ordersTab === 'toOrder')} onClick={() => setOrdersTab('toOrder')}>🛒 To Order ({toOrder.length})</div><div style={s.tab(ordersTab === 'pending')} onClick={() => setOrdersTab('pending')}>📦 Ordered ({pending.length})</div><div style={s.tab(ordersTab === 'log')} onClick={() => setOrdersTab('log')}>📜 Order Log</div></div>{ordersTab === 'toOrder' && (<div style={s.card}><div style={s.cardTitle}>🛒 MATERIALS TO ORDER</div>{toOrder.length === 0 ? <div style={{ textAlign: 'center', padding: 50, color: COLORS.accent }}>✅ No materials to order</div> : (<table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Request</th><th style={s.th}>Code</th><th style={s.th}>Description</th><th style={s.th}>Qty</th><th style={{ ...s.th, ...s.thLast }}>Actions</th></tr></thead><tbody>{toOrder.map((item, idx) => (<tr key={idx}><td style={s.td}><strong>{formatReqNum(item.req.num, item.req.sub)}</strong></td><td style={s.td}>{item.code}</td><td style={s.td}>{item.desc}</td><td style={s.td}><strong>{item.qty}</strong></td><td style={s.td}><div style={{ display: 'flex', gap: 6 }}><button style={s.btnSmall(COLORS.info)} onClick={() => markAsOrdered(item.req, item, 'Standard')}>📦 Standard</button><button style={s.btnSmall(COLORS.warning)} onClick={() => markAsOrdered(item.req, item, 'Urgent')}>⚡ Urgent</button></div></td></tr>))}</tbody></table>)}</div>)}{ordersTab === 'pending' && (<div style={s.card}><div style={s.cardTitle}>📦 ORDERED - AWAITING ARRIVAL</div>{pending.length === 0 ? <div style={{ textAlign: 'center', padding: 50, color: COLORS.accent }}>✅ No pending orders</div> : (<table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Request</th><th style={s.th}>Code</th><th style={s.th}>Qty</th><th style={s.th}>Type</th><th style={s.th}>Order Date</th><th style={{ ...s.th, ...s.thLast }}>Actions</th></tr></thead><tbody>{pending.map(order => (<tr key={order.id}><td style={s.td}><strong>{order.reqNum}</strong></td><td style={s.td}>{order.code}</td><td style={s.td}>{order.qty}</td><td style={s.td}><span style={s.statusBadge(order.orderType === 'Urgent' ? COLORS.warning : COLORS.info)}>{order.orderType}</span></td><td style={s.td}>{formatDate(order.orderDate)}</td><td style={s.td}><button style={s.btnSmall(COLORS.success)} onClick={() => markOrderArrived(order)}>✅ Arrived</button></td></tr>))}</tbody></table>)}</div>)}{ordersTab === 'log' && (<div style={s.card}><div style={s.cardTitle}>📜 ORDER LOG</div><table style={s.table}><thead><tr><th style={{ ...s.th, ...s.thFirst }}>Req #</th><th style={s.th}>Code</th><th style={s.th}>Qty</th><th style={s.th}>Type</th><th style={s.th}>Order Date</th><th style={{ ...s.th, ...s.thLast }}>Status</th></tr></thead><tbody>{orderLog.map(o => (<tr key={o.id}><td style={s.td}>{o.reqNum}</td><td style={s.td}>{o.code}</td><td style={s.td}>{o.qty}</td><td style={s.td}>{o.orderType}</td><td style={s.td}>{formatDate(o.orderDate)}</td><td style={s.td}><span style={s.statusBadge(o.status === 'Arrived' ? COLORS.success : COLORS.warning)}>{o.status}</span></td></tr>))}</tbody></table></div>)}</div>); };
-
-  const renderModal = () => {
-    if (!modal) return null;
-    if (modal === 'balance') {
-      return (
-        <div style={s.modal} onClick={() => setModal(null)}>
-          <div style={s.modalBox} onClick={e => e.stopPropagation()}>
-            <div style={{ ...s.cardTitle, marginBottom: 24 }}>⚖️ Inventory Adjustment</div>
-            <div style={s.formGrid}>
-              <div style={s.formGroup}><label style={s.label}>Type *</label><select style={s.select} value={balanceForm.balType} onChange={e => setBalanceForm({...balanceForm, balType: e.target.value})}><option>Adjustment</option><option>Lost</option><option>Broken</option></select></div>
-              <div style={s.formGroup}><label style={s.label}>Location</label><select style={s.select} value={balanceForm.loc} onChange={e => setBalanceForm({...balanceForm, loc: e.target.value})}><option>YARD</option><option>SITE</option></select></div>
-            </div>
-            {(balanceForm.balType === 'Lost' || balanceForm.balType === 'Broken') && <div style={s.alert('error')}>⚠️ Quantity will be subtracted from inventory</div>}
-            <div style={s.formGrid}>
-              <div style={s.formGroup}><label style={s.label}>Material Code *</label><select style={s.select} value={balanceForm.code} onChange={e => setBalanceForm({...balanceForm, code: e.target.value})}><option value="">-- Select --</option>{Object.entries(materials).map(([code, desc]) => (<option key={code} value={code}>{code} - {desc}</option>))}</select></div>
-              <div style={s.formGroup}><label style={s.label}>Quantity *</label><input style={s.input} type="number" value={balanceForm.qty} onChange={e => setBalanceForm({...balanceForm, qty: e.target.value})} /></div>
-            </div>
-            <div style={s.formGrid}>
-              <div style={s.formGroup}><label style={s.label}>Your Name *</label><input style={s.input} value={balanceForm.name} onChange={e => setBalanceForm({...balanceForm, name: e.target.value})} /></div>
-              <div style={s.formGroup}><label style={s.label}>Your Badge *</label><input style={s.input} value={balanceForm.badge} onChange={e => setBalanceForm({...balanceForm, badge: e.target.value})} /></div>
-            </div>
-            <div style={s.formGroup}><label style={s.label}>Note</label><input style={s.input} value={balanceForm.note} onChange={e => setBalanceForm({...balanceForm, note: e.target.value})} placeholder="Reason for adjustment" /></div>
-            <div style={{ marginTop: 28, display: 'flex', gap: 16 }}>
-              <button style={s.btn(COLORS.success)} onClick={registerBalance}>✅ Save Adjustment</button>
-              <button style={{ ...s.btn(COLORS.accent), background: 'transparent', color: COLORS.accent, border: `2px solid ${COLORS.accent}`, boxShadow: 'none' }} onClick={() => setModal(null)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
+  // ============================================
+  // MAIN RENDER
+  // ============================================
   return (
-    <div style={s.app}>
-      <div style={s.sidebar}>
-        <div style={s.logoArea}>
-          <div style={s.logoIcon}>S</div>
-          {!sidebarCollapsed && <div><div style={{ fontWeight: '800', fontSize: 18 }}>STREICHER</div><div style={{ fontSize: 11, opacity: 0.7 }}>Materials Manager</div></div>}
-        </div>
-        <div style={s.nav}>
-          {navItems.map(item => (
-            <div key={item.id} style={s.navItem(view === item.id)} onClick={() => setView(item.id)} onMouseEnter={e => { if (view !== item.id) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }} onMouseLeave={e => { if (view !== item.id) e.currentTarget.style.background = 'transparent'; }}>
-              <span style={{ fontSize: 18 }}>{item.icon}</span>
-              {!sidebarCollapsed && <span style={{ flex: 1 }}>{item.label}</span>}
-              {item.count > 0 && <span style={s.badge}>{item.count}</span>}
-            </div>
-          ))}
-        </div>
-        <div style={{ padding: 16, borderTop: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', textAlign: 'center' }} onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
-          {sidebarCollapsed ? '→' : '← Collapse'}
-        </div>
-      </div>
-      <div style={s.main}>
-        <div style={s.header}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={s.headerIcon}>{navItems.find(n => n.id === view)?.icon}</div>
-            <div><div style={{ fontSize: 22, fontWeight: '800', color: COLORS.secondary }}>{navItems.find(n => n.id === view)?.label.toUpperCase()}</div><div style={{ color: COLORS.accent, fontSize: 13 }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
+    <div className="min-h-screen flex" style={{ backgroundColor: COLORS.background }}>
+      {/* Sidebar */}
+      <div 
+        className={`${sidebarOpen ? 'w-64' : 'w-20'} transition-all duration-300 flex flex-col`}
+        style={{ backgroundColor: COLORS.secondary }}
+      >
+        {/* Logo */}
+        <div className="p-4 flex items-center gap-3 border-b border-gray-700">
+          <div 
+            className="flex items-center justify-center flex-shrink-0" 
+            style={{ backgroundColor: COLORS.primary, width: 40, height: 40, borderRadius: 8 }}
+          >
+            <span className="text-white font-bold text-xl">S</span>
           </div>
-          <div style={{ fontSize: 13, color: COLORS.accent, fontWeight: '600' }}>V25 STREICHER Edition</div>
+          {sidebarOpen && (
+            <div>
+              <div className="text-white font-bold">STREICHER</div>
+              <div className="text-gray-400 text-xs">Materials Manager V25</div>
+            </div>
+          )}
         </div>
-        <div style={s.content}>
-          {loading && <div style={{ textAlign: 'center', padding: 50 }}><div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div><div>Loading data...</div></div>}
-          {error && <div style={s.alert('error')}>{error}</div>}
-          {view === 'dashboard' && renderDashboard()}
-          {view === 'newRequest' && renderNewRequest()}
-          {view === 'whSite' && renderWarehouse('Site')}
-          {view === 'whYard' && renderWarehouse('Yard')}
-          {view === 'siteIn' && renderSiteIn()}
-          {view === 'recordOut' && renderRecordOut()}
-          {view === 'mir' && renderMIR()}
-          {view === 'materialIn' && renderMaterialIn()}
-          {view === 'engineering' && renderEngineering()}
-          {view === 'management' && renderManagement()}
-          {view === 'movements' && renderMovements()}
-          {view === 'database' && renderDatabase()}
-          {view === 'status' && renderStatus()}
-          {view === 'spare' && renderSpare()}
-          {view === 'orders' && renderOrders()}
+        
+        {/* Menu */}
+        <nav className="flex-1 overflow-y-auto py-4">
+          {menuItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => item.id === 'newRequest' ? setNewRequestModal(true) : setCurrentPage(item.id)}
+              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                currentPage === item.id ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'
+              }`}
+            >
+              <span className="text-xl">{item.icon}</span>
+              {sidebarOpen && (
+                <>
+                  <span className="flex-1">{item.label}</span>
+                  {item.count !== undefined && item.count > 0 && (
+                    <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      {item.count}
+                    </span>
+                  )}
+                </>
+              )}
+            </button>
+          ))}
+        </nav>
+        
+        {/* Toggle */}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="p-4 text-gray-400 hover:text-white border-t border-gray-700"
+        >
+          {sidebarOpen ? '◀' : '▶'}
+        </button>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto">
+        <div className="p-6">
+          {/* Dashboard */}
+          {currentPage === 'dashboard' && (
+            <div>
+              <h1 className="text-2xl font-bold mb-6" style={{ color: COLORS.secondary }}>Dashboard</h1>
+              
+              {/* Inventory Summary - 4 BOXES SEPARATI */}
+              <div className="grid grid-cols-4 gap-4 mb-8">
+                <div className="p-6 rounded-xl text-white" style={{ backgroundColor: COLORS.secondary }}>
+                  <div className="text-3xl font-bold">{totalYard}</div>
+                  <div className="text-gray-300">YARD</div>
+                </div>
+                <div className="p-6 rounded-xl text-white" style={{ backgroundColor: COLORS.info }}>
+                  <div className="text-3xl font-bold">{totalSite}</div>
+                  <div className="text-blue-200">SITE</div>
+                </div>
+                <div className="p-6 rounded-xl text-white" style={{ backgroundColor: COLORS.warning }}>
+                  <div className="text-3xl font-bold">{totalLost}</div>
+                  <div className="text-orange-200">LOST</div>
+                </div>
+                <div className="p-6 rounded-xl text-white" style={{ backgroundColor: COLORS.purple }}>
+                  <div className="text-3xl font-bold">{totalBroken}</div>
+                  <div className="text-purple-200">BROKEN</div>
+                </div>
+              </div>
+
+              {/* Status Summary */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-white p-4 rounded-lg shadow">
+                  <h3 className="font-semibold mb-2">In Lavorazione</h3>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between"><span>WH Site</span><span className="font-bold">{siteComponents.length}</span></div>
+                    <div className="flex justify-between"><span>WH Yard</span><span className="font-bold">{yardComponents.length}</span></div>
+                    <div className="flex justify-between"><span>In Transit</span><span className="font-bold">{transComponents.length}</span></div>
+                    <div className="flex justify-between"><span>Engineering</span><span className="font-bold">{utComponents.length}</span></div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow">
+                  <h3 className="font-semibold mb-2">In Attesa</h3>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between"><span>Spare Parts</span><span className="font-bold">{spareComponents.length}</span></div>
+                    <div className="flex justify-between"><span>Management</span><span className="font-bold">{mngComponents.length}</span></div>
+                    <div className="flex justify-between"><span>Da Ordinare</span><span className="font-bold">{orderComponents.length}</span></div>
+                    <div className="flex justify-between"><span>Ordinati</span><span className="font-bold">{orderedComponents.length}</span></div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow">
+                  <h3 className="font-semibold mb-2">Completati</h3>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between"><span>Ready OUT</span><span className="font-bold">{readyOut.length}</span></div>
+                    <div className="flex justify-between"><span>Delivered</span><span className="font-bold">{delivered.length}</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* WH SITE */}
+          {currentPage === 'whSite' && (
+            <div>
+              <h1 className="text-2xl font-bold mb-6" style={{ color: COLORS.secondary }}>WH Site (Magazzino Site)</h1>
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiesta</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiedente</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Inv. Site</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {siteComponents.map(comp => {
+                      const request = getRequestInfo(comp);
+                      const siteQty = getInventoryQty(comp.material_code, 'SITE');
+                      const canConfirm = siteQty >= comp.quantity;
+                      
+                      return (
+                        <tr key={comp.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 font-medium">{getRequestDisplay(comp)}</td>
+                          <td className="px-4 py-3">{request?.requester}</td>
+                          <td className="px-4 py-3">
+                            <div>{comp.material_code}</div>
+                            <div className="text-xs text-gray-500">{comp.description}</div>
+                          </td>
+                          <td className="px-4 py-3 font-bold">{comp.quantity}</td>
+                          <td className="px-4 py-3">
+                            <span className={siteQty >= comp.quantity ? 'text-green-600' : 'text-red-600'}>
+                              {siteQty}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-1 flex-wrap">
+                              <button
+                                onClick={() => handleSiteConfirm(comp)}
+                                disabled={!canConfirm}
+                                className="px-2 py-1 text-white text-sm rounded disabled:opacity-50"
+                                style={{ backgroundColor: COLORS.success }}
+                                title="Conferma → Ready OUT"
+                              >✓</button>
+                              <button
+                                onClick={() => setSplitModal({ 
+                                  open: true, 
+                                  component: comp, 
+                                  destinations: [
+                                    { value: 'Yard', label: 'WH Yard' },
+                                    { value: 'UT', label: 'Engineering' },
+                                    { value: 'Mng', label: 'Management' },
+                                    { value: 'Order', label: 'Orders' }
+                                  ]
+                                })}
+                                className="px-2 py-1 text-white text-sm rounded"
+                                style={{ backgroundColor: COLORS.warning }}
+                                title="Split Parziale"
+                              >PT</button>
+                              <button
+                                onClick={() => handleSiteToYard(comp)}
+                                className="px-2 py-1 text-white text-sm rounded"
+                                style={{ backgroundColor: COLORS.yellow }}
+                                title="Manda a Yard"
+                              >Y</button>
+                              <button
+                                onClick={() => handleSiteToUT(comp)}
+                                className="px-2 py-1 text-white text-sm rounded"
+                                style={{ backgroundColor: COLORS.purple }}
+                                title="Manda a Engineering"
+                              >UT</button>
+                              <button
+                                onClick={() => setConfirmModal({
+                                  open: true,
+                                  message: 'Eliminare questo componente?',
+                                  onConfirm: () => handleDeleteComponent(comp.id)
+                                })}
+                                className="px-2 py-1 text-white text-sm rounded"
+                                style={{ backgroundColor: COLORS.danger }}
+                                title="Elimina"
+                              >🗑️</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {siteComponents.length === 0 && (
+                      <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">Nessun componente in attesa</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* WH YARD */}
+          {currentPage === 'whYard' && (
+            <div>
+              <h1 className="text-2xl font-bold mb-6" style={{ color: COLORS.secondary }}>WH Yard (Magazzino Yard)</h1>
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiesta</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiedente</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Inv. Yard</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {yardComponents.map(comp => {
+                      const request = getRequestInfo(comp);
+                      const yardQty = getInventoryQty(comp.material_code, 'YARD');
+                      const canConfirm = yardQty >= comp.quantity;
+                      
+                      return (
+                        <tr key={comp.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 font-medium">{getRequestDisplay(comp)}</td>
+                          <td className="px-4 py-3">{request?.requester}</td>
+                          <td className="px-4 py-3">
+                            <div>{comp.material_code}</div>
+                            <div className="text-xs text-gray-500">{comp.description}</div>
+                          </td>
+                          <td className="px-4 py-3 font-bold">{comp.quantity}</td>
+                          <td className="px-4 py-3">
+                            <span className={yardQty >= comp.quantity ? 'text-green-600' : 'text-red-600'}>
+                              {yardQty}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-1 flex-wrap">
+                              <button
+                                onClick={() => handleYardConfirm(comp)}
+                                disabled={!canConfirm}
+                                className="px-2 py-1 text-white text-sm rounded disabled:opacity-50"
+                                style={{ backgroundColor: COLORS.success }}
+                                title="Trovato → Transfer"
+                              >✓</button>
+                              <button
+                                onClick={() => setSplitModal({ 
+                                  open: true, 
+                                  component: comp, 
+                                  destinations: [
+                                    { value: 'UT', label: 'Engineering' },
+                                    { value: 'Mng', label: 'Management' },
+                                    { value: 'Order', label: 'Orders' }
+                                  ]
+                                })}
+                                className="px-2 py-1 text-white text-sm rounded"
+                                style={{ backgroundColor: COLORS.warning }}
+                                title="Split Parziale"
+                              >PT</button>
+                              <button
+                                onClick={() => handleYardToUT(comp)}
+                                className="px-2 py-1 text-white text-sm rounded"
+                                style={{ backgroundColor: COLORS.purple }}
+                                title="Manda a Engineering"
+                              >UT</button>
+                              <button
+                                onClick={() => handleYardReturn(comp)}
+                                className="px-2 py-1 text-white text-sm rounded"
+                                style={{ backgroundColor: COLORS.gray }}
+                                title="Ritorna a Site"
+                              >↩</button>
+                              <button
+                                onClick={() => setConfirmModal({
+                                  open: true,
+                                  message: 'Eliminare questo componente?',
+                                  onConfirm: () => handleDeleteComponent(comp.id)
+                                })}
+                                className="px-2 py-1 text-white text-sm rounded"
+                                style={{ backgroundColor: COLORS.danger }}
+                                title="Elimina"
+                              >🗑️</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {yardComponents.length === 0 && (
+                      <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">Nessun componente in attesa</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SITE IN */}
+          {currentPage === 'siteIn' && (
+            <div>
+              <h1 className="text-2xl font-bold mb-6" style={{ color: COLORS.secondary }}>Site IN (In Arrivo da Yard)</h1>
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiesta</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {transComponents.map(comp => (
+                      <tr key={comp.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium">{getRequestDisplay(comp)}</td>
+                        <td className="px-4 py-3">
+                          <div>{comp.material_code}</div>
+                          <div className="text-xs text-gray-500">{comp.description}</div>
+                        </td>
+                        <td className="px-4 py-3 font-bold">{comp.quantity}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleSiteInConfirm(comp)}
+                              className="px-2 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.success }}
+                              title="Conferma Ricezione"
+                            >✓</button>
+                            <button
+                              onClick={() => handleSiteInReject(comp)}
+                              className="px-2 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.gray }}
+                              title="Rifiuta → Ritorna a Yard"
+                            >↩</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {transComponents.length === 0 && (
+                      <tr><td colSpan="4" className="px-4 py-8 text-center text-gray-500">Nessun materiale in transito</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ENGINEERING */}
+          {currentPage === 'engineering' && (
+            <div>
+              <h1 className="text-2xl font-bold mb-6" style={{ color: COLORS.secondary }}>Engineering (Ufficio Tecnico)</h1>
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiesta</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Note</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {[...utComponents, ...utCheckComponents].map(comp => (
+                      <tr key={comp.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium">{getRequestDisplay(comp)}</td>
+                        <td className="px-4 py-3">
+                          <div>{comp.material_code}</div>
+                          <div className="text-xs text-gray-500">{comp.description}</div>
+                        </td>
+                        <td className="px-4 py-3 font-bold">{comp.quantity}</td>
+                        <td className="px-4 py-3 text-sm">
+                          {comp.ut_note && (
+                            <div className="bg-yellow-50 p-2 rounded text-yellow-800">
+                              {comp.ut_note}
+                              <div className="text-xs text-gray-500">→ {comp.sent_to}</div>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1 flex-wrap">
+                            <button
+                              onClick={() => handleUTConfirm(comp)}
+                              className="px-2 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.success }}
+                              title="Risolto → Ready OUT"
+                            >✓</button>
+                            <button
+                              onClick={() => setSplitModal({ 
+                                open: true, 
+                                component: comp, 
+                                destinations: [
+                                  { value: 'Site', label: 'WH Site' },
+                                  { value: 'Yard', label: 'WH Yard' },
+                                  { value: 'Spare', label: 'Spare Parts' },
+                                  { value: 'Mng', label: 'Management' },
+                                  { value: 'Order', label: 'Orders' }
+                                ]
+                              })}
+                              className="px-2 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.warning }}
+                              title="Split Parziale"
+                            >PT</button>
+                            <button
+                              onClick={() => setNoteModal({ open: true, component: comp })}
+                              className="px-2 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.purple }}
+                              title="Invia Nota a Site/Yard"
+                            >🔍</button>
+                            <button
+                              onClick={() => handleUTToSpare(comp)}
+                              className="px-2 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.pink }}
+                              title="Spare Parts"
+                            >Sp</button>
+                            <button
+                              onClick={() => handleUTToMng(comp)}
+                              className="px-2 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.cyan }}
+                              title="Management"
+                            >Mng</button>
+                            <button
+                              onClick={() => handleUTReturn(comp)}
+                              className="px-2 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.gray }}
+                              title="Ritorna"
+                            >↩</button>
+                            <button
+                              onClick={() => setConfirmModal({
+                                open: true,
+                                message: 'Eliminare questo componente?',
+                                onConfirm: () => handleDeleteComponent(comp.id)
+                              })}
+                              className="px-2 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.danger }}
+                              title="Elimina"
+                            >🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {utComponents.length === 0 && utCheckComponents.length === 0 && (
+                      <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-500">Nessun componente in Engineering</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SPARE PARTS */}
+          {currentPage === 'spareParts' && (
+            <div>
+              <h1 className="text-2xl font-bold mb-6" style={{ color: COLORS.secondary }}>Spare Parts</h1>
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiesta</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {spareComponents.map(comp => (
+                      <tr key={comp.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium">{getRequestDisplay(comp)}</td>
+                        <td className="px-4 py-3">
+                          <div>{comp.material_code}</div>
+                          <div className="text-xs text-gray-500">{comp.description}</div>
+                        </td>
+                        <td className="px-4 py-3 font-bold">{comp.quantity}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleSpareConfirm(comp)}
+                              className="px-3 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.success }}
+                              title="Ha Spare Cliente → Ready OUT"
+                            >✓ Ha Spare</button>
+                            <button
+                              onClick={() => handleSpareToOrder(comp)}
+                              className="px-3 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.info }}
+                              title="Non ha spare → Orders"
+                            >Acquisto</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {spareComponents.length === 0 && (
+                      <tr><td colSpan="4" className="px-4 py-8 text-center text-gray-500">Nessun componente in Spare Parts</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* MANAGEMENT */}
+          {currentPage === 'management' && (
+            <div>
+              <h1 className="text-2xl font-bold mb-6" style={{ color: COLORS.secondary }}>Management</h1>
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiesta</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Note</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {mngComponents.map(comp => (
+                      <tr key={comp.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium">{getRequestDisplay(comp)}</td>
+                        <td className="px-4 py-3">
+                          <div>{comp.material_code}</div>
+                          <div className="text-xs text-gray-500">{comp.description}</div>
+                        </td>
+                        <td className="px-4 py-3 font-bold">{comp.quantity}</td>
+                        <td className="px-4 py-3 text-sm">{comp.mng_note}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleMngInternal(comp)}
+                              className="px-3 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.info }}
+                              title="Ordine Interno"
+                            >Int</button>
+                            <button
+                              onClick={() => handleMngClient(comp)}
+                              className="px-3 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.success }}
+                              title="Ordine Cliente"
+                            >Cli</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {mngComponents.length === 0 && (
+                      <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-500">Nessun componente in Management</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ORDERS - 3 TABS */}
+          {currentPage === 'orders' && (
+            <div>
+              <h1 className="text-2xl font-bold mb-6" style={{ color: COLORS.secondary }}>Orders</h1>
+              
+              {/* Tabs */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setOrdersTab('toOrder')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    ordersTab === 'toOrder' ? 'text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                  style={ordersTab === 'toOrder' ? { backgroundColor: COLORS.info } : {}}
+                >
+                  Da Ordinare ({orderComponents.length})
+                </button>
+                <button
+                  onClick={() => setOrdersTab('ordered')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    ordersTab === 'ordered' ? 'text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                  style={ordersTab === 'ordered' ? { backgroundColor: COLORS.warning } : {}}
+                >
+                  Ordinati ({orderedComponents.length})
+                </button>
+                <button
+                  onClick={() => setOrdersTab('log')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    ordersTab === 'log' ? 'text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                  style={ordersTab === 'log' ? { backgroundColor: COLORS.gray } : {}}
+                >
+                  Log ({orderLog.length})
+                </button>
+              </div>
+
+              {/* Tab Content */}
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                {ordersTab === 'toOrder' && (
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiesta</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Tipo</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Azioni</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {orderComponents.map(comp => (
+                        <tr key={comp.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 font-medium">{getRequestDisplay(comp)}</td>
+                          <td className="px-4 py-3">
+                            <div>{comp.material_code}</div>
+                            <div className="text-xs text-gray-500">{comp.description}</div>
+                          </td>
+                          <td className="px-4 py-3 font-bold">{comp.quantity}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              comp.order_type === 'Client' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {comp.order_type || 'Internal'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => setOrderModal({ open: true, component: comp })}
+                              className="px-3 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.info }}
+                            >🛒 Acquista</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {orderComponents.length === 0 && (
+                        <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-500">Nessun ordine in attesa</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+
+                {ordersTab === 'ordered' && (
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiesta</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Data Ordine</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Previsione</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Azioni</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {orderedComponents.map(comp => (
+                        <tr key={comp.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 font-medium">{getRequestDisplay(comp)}</td>
+                          <td className="px-4 py-3">
+                            <div>{comp.material_code}</div>
+                            <div className="text-xs text-gray-500">{comp.description}</div>
+                          </td>
+                          <td className="px-4 py-3 font-bold">{comp.purchase_qty || comp.quantity}</td>
+                          <td className="px-4 py-3">{comp.purchase_date}</td>
+                          <td className="px-4 py-3">{comp.purchase_forecast}</td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => handleOrderArrived(comp)}
+                              className="px-3 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.success }}
+                            >✓ Arrivato</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {orderedComponents.length === 0 && (
+                        <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">Nessun ordine in corso</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+
+                {ordersTab === 'log' && (
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Data</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Tipo</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Stato</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {orderLog.map(log => (
+                        <tr key={log.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">{log.order_date}</td>
+                          <td className="px-4 py-3">{log.material_code}</td>
+                          <td className="px-4 py-3 font-bold">{log.quantity_ordered}</td>
+                          <td className="px-4 py-3">{log.order_type}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              log.status === 'Arrived' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {log.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                      {orderLog.length === 0 && (
+                        <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-500">Nessun log ordini</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* READY OUT */}
+          {currentPage === 'readyOut' && (
+            <div>
+              <h1 className="text-2xl font-bold mb-6" style={{ color: COLORS.secondary }}>Ready OUT (Pronti per Consegna)</h1>
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiesta</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiedente</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Badge</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {readyOut.map(item => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium">{item.request_number}</td>
+                        <td className="px-4 py-3">{item.requester}</td>
+                        <td className="px-4 py-3">{item.badge}</td>
+                        <td className="px-4 py-3">
+                          <div>{item.material_code}</div>
+                          <div className="text-xs text-gray-500">{item.description}</div>
+                        </td>
+                        <td className="px-4 py-3 font-bold">{item.quantity}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleReadyOutDeliver(item)}
+                              className="px-3 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.success }}
+                            >✓ Consegnato</button>
+                            <button
+                              onClick={() => handleReadyOutCancel(item)}
+                              className="px-2 py-1 text-white text-sm rounded"
+                              style={{ backgroundColor: COLORS.danger }}
+                            >🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {readyOut.length === 0 && (
+                      <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">Nessun materiale pronto</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* DELIVERED */}
+          {currentPage === 'delivered' && (
+            <div>
+              <h1 className="text-2xl font-bold mb-6" style={{ color: COLORS.secondary }}>Delivered (Consegnati)</h1>
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Data</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiesta</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiedente</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {delivered.map(item => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">{item.delivered_date ? new Date(item.delivered_date).toLocaleDateString() : '-'}</td>
+                        <td className="px-4 py-3 font-medium">{item.request_number}</td>
+                        <td className="px-4 py-3">{item.requester}</td>
+                        <td className="px-4 py-3">
+                          <div>{item.material_code}</div>
+                          <div className="text-xs text-gray-500">{item.description}</div>
+                        </td>
+                        <td className="px-4 py-3 font-bold">{item.quantity}</td>
+                      </tr>
+                    ))}
+                    {delivered.length === 0 && (
+                      <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-500">Nessuna consegna</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* MOVEMENTS */}
+          {currentPage === 'movements' && (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold" style={{ color: COLORS.secondary }}>Movements</h1>
+                <button
+                  onClick={() => setMovementModal({ open: true })}
+                  className="px-4 py-2 text-white rounded-lg flex items-center gap-2"
+                  style={{ backgroundColor: COLORS.info }}
+                >
+                  <span>+</span> Aggiungi Movimento
+                </button>
+              </div>
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Data</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Tipo</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Location</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Note</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {movements.slice(0, 100).map(mov => (
+                      <tr key={mov.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm">{mov.movement_date ? new Date(mov.movement_date).toLocaleString() : '-'}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            mov.movement_type === 'IN' ? 'bg-green-100 text-green-800' :
+                            mov.movement_type === 'OUT' ? 'bg-red-100 text-red-800' :
+                            mov.movement_type === 'TRF' ? 'bg-blue-100 text-blue-800' :
+                            mov.movement_type === 'LOST' ? 'bg-orange-100 text-orange-800' :
+                            mov.movement_type === 'BROKEN' ? 'bg-purple-100 text-purple-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {mov.movement_type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">{mov.location}</td>
+                        <td className="px-4 py-3">{mov.material_code}</td>
+                        <td className="px-4 py-3 font-bold">{mov.quantity}</td>
+                        <td className="px-4 py-3 text-sm text-gray-500">{mov.note}</td>
+                      </tr>
+                    ))}
+                    {movements.length === 0 && (
+                      <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">Nessun movimento</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* INVENTORY */}
+          {currentPage === 'inventory' && (
+            <div>
+              <h1 className="text-2xl font-bold mb-6" style={{ color: COLORS.secondary }}>Inventory</h1>
+              <div className="grid grid-cols-3 gap-4">
+                {['SITE', 'YARD', 'INTRANSIT'].map(location => (
+                  <div key={location} className="bg-white rounded-lg shadow overflow-hidden">
+                    <div className="px-4 py-3 font-semibold text-white" style={{ 
+                      backgroundColor: location === 'SITE' ? COLORS.info : 
+                                      location === 'YARD' ? COLORS.secondary : COLORS.warning
+                    }}>
+                      {location}
+                    </div>
+                    <div className="divide-y max-h-96 overflow-y-auto">
+                      {inventory.filter(i => i.location === location && i.quantity > 0).map(inv => (
+                        <div key={inv.id} className="px-4 py-2 flex justify-between">
+                          <span className="text-sm">{inv.material_code}</span>
+                          <span className="font-bold">{inv.quantity}</span>
+                        </div>
+                      ))}
+                      {inventory.filter(i => i.location === location && i.quantity > 0).length === 0 && (
+                        <div className="px-4 py-4 text-center text-gray-400 text-sm">Vuoto</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* STATUS */}
+          {currentPage === 'status' && (
+            <div>
+              <h1 className="text-2xl font-bold mb-6" style={{ color: COLORS.secondary }}>Status Overview</h1>
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiesta</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Richiedente</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Materiale</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Qty</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {components.map(comp => {
+                      const request = getRequestInfo(comp);
+                      return (
+                        <tr key={comp.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 font-medium">{getRequestDisplay(comp)}</td>
+                          <td className="px-4 py-3">{request?.requester}</td>
+                          <td className="px-4 py-3">
+                            <div>{comp.material_code}</div>
+                            <div className="text-xs text-gray-500">{comp.description}</div>
+                          </td>
+                          <td className="px-4 py-3 font-bold">{comp.quantity}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              comp.status === 'Done' ? 'bg-green-100 text-green-800' :
+                              comp.status === 'Out' ? 'bg-blue-100 text-blue-800' :
+                              comp.status === 'UT' ? 'bg-purple-100 text-purple-800' :
+                              comp.status === 'Ordered' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {comp.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {components.length === 0 && (
+                      <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-500">Nessun componente</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-      {renderModal()}
+
+      {/* ============================================ */}
+      {/* MODALS */}
+      {/* ============================================ */}
+      
+      {/* Split Modal */}
+      {splitModal.open && splitModal.component && (
+        <SplitModal 
+          component={splitModal.component}
+          destinations={splitModal.destinations}
+          onConfirm={handleSplit}
+          onClose={() => setSplitModal({ open: false, component: null, destinations: [] })}
+        />
+      )}
+
+      {/* Order Modal */}
+      {orderModal.open && orderModal.component && (
+        <OrderModal 
+          component={orderModal.component}
+          onConfirm={handleOrderPurchase}
+          onClose={() => setOrderModal({ open: false, component: null })}
+        />
+      )}
+
+      {/* Movement Modal */}
+      {movementModal.open && (
+        <MovementModal 
+          onConfirm={handleNewMovement}
+          onClose={() => setMovementModal({ open: false })}
+        />
+      )}
+
+      {/* Note Modal */}
+      {noteModal.open && noteModal.component && (
+        <NoteModal 
+          component={noteModal.component}
+          onConfirm={(noteText, destination) => handleUTSendNote(noteModal.component, noteText, destination)}
+          onClose={() => setNoteModal({ open: false, component: null })}
+        />
+      )}
+
+      {/* Confirm Modal */}
+      {confirmModal.open && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
+            <p className="mb-4">{confirmModal.message}</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmModal({ open: false, message: '', onConfirm: null })}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+              >Annulla</button>
+              <button
+                onClick={() => confirmModal.onConfirm && confirmModal.onConfirm()}
+                className="px-4 py-2 text-white rounded"
+                style={{ backgroundColor: COLORS.danger }}
+              >Conferma</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Request Modal */}
+      {newRequestModal && (
+        <NewRequestModal 
+          onConfirm={handleNewRequest}
+          onClose={() => setNewRequestModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// SPLIT MODAL COMPONENT
+// ============================================
+function SplitModal({ component, destinations, onConfirm, onClose }) {
+  const [foundQty, setFoundQty] = useState('');
+  const [destination, setDestination] = useState('');
+  const [step, setStep] = useState(1);
+  
+  const remaining = component.quantity - parseInt(foundQty || 0);
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <h3 className="text-lg font-semibold mb-4">Split Parziale (PT)</h3>
+        
+        {step === 1 ? (
+          <div>
+            <p className="text-gray-600 mb-4">Quantità richiesta: <strong>{component.quantity}</strong></p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Quantità trovata:</label>
+              <input
+                type="number"
+                min="1"
+                max={component.quantity - 1}
+                value={foundQty}
+                onChange={(e) => setFoundQty(e.target.value)}
+                className="w-full border rounded px-3 py-2"
+                placeholder="Inserisci quantità..."
+              />
+            </div>
+            {foundQty && remaining > 0 && (
+              <p className="text-sm text-gray-500 mb-4">Rimanenti: <strong>{remaining}</strong></p>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Annulla</button>
+              <button
+                onClick={() => setStep(2)}
+                disabled={!foundQty || parseInt(foundQty) <= 0 || parseInt(foundQty) >= component.quantity}
+                className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+              >Avanti</button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p className="text-gray-600 mb-4">Trovati: <strong>{foundQty}</strong> | Rimanenti: <strong>{remaining}</strong></p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Dove mandare i rimanenti?</label>
+              <select
+                value={destination}
+                onChange={(e) => setDestination(e.target.value)}
+                className="w-full border rounded px-3 py-2"
+              >
+                <option value="">Seleziona destinazione...</option>
+                {destinations.map(d => (
+                  <option key={d.value} value={d.value}>{d.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setStep(1)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Indietro</button>
+              <button
+                onClick={() => onConfirm({ componentId: component.id, foundQty: parseInt(foundQty), remaining, destination })}
+                disabled={!destination}
+                className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50"
+              >Conferma Split</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// ORDER MODAL COMPONENT
+// ============================================
+function OrderModal({ component, onConfirm, onClose }) {
+  const [qty, setQty] = useState(component?.quantity?.toString() || '');
+  const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
+  const [forecastDate, setForecastDate] = useState('');
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <h3 className="text-lg font-semibold mb-4">🛒 Acquista</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Quantità da ordinare:</label>
+            <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} className="w-full border rounded px-3 py-2" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Data Ordine:</label>
+            <input type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} className="w-full border rounded px-3 py-2" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Data Prevista Arrivo:</label>
+            <input type="date" value={forecastDate} onChange={(e) => setForecastDate(e.target.value)} className="w-full border rounded px-3 py-2" />
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Annulla</button>
+            <button
+              onClick={() => onConfirm({ componentId: component.id, qty: parseInt(qty), orderDate, forecastDate })}
+              className="px-4 py-2 bg-blue-600 text-white rounded"
+            >Conferma Ordine</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// MOVEMENT MODAL COMPONENT
+// ============================================
+function MovementModal({ onConfirm, onClose }) {
+  const [movementType, setMovementType] = useState('IN');
+  const [location, setLocation] = useState('SITE');
+  const [materialCode, setMaterialCode] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [note, setNote] = useState('');
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <h3 className="text-lg font-semibold mb-4">+ Nuovo Movimento</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo Movimento:</label>
+            <select value={movementType} onChange={(e) => setMovementType(e.target.value)} className="w-full border rounded px-3 py-2">
+              <option value="IN">IN - Carico</option>
+              <option value="OUT">OUT - Scarico</option>
+              <option value="TRF">TRF - Trasferimento</option>
+              <option value="BAL">BAL - Rettifica</option>
+              <option value="LOST">LOST - Perso</option>
+              <option value="BROKEN">BROKEN - Rotto</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Location:</label>
+            <select value={location} onChange={(e) => setLocation(e.target.value)} className="w-full border rounded px-3 py-2">
+              <option value="SITE">SITE</option>
+              <option value="YARD">YARD</option>
+              <option value="INTRANSIT">IN TRANSIT</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Codice Materiale:</label>
+            <input type="text" value={materialCode} onChange={(e) => setMaterialCode(e.target.value)} placeholder="Es: MAT-001" className="w-full border rounded px-3 py-2" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Quantità:</label>
+            <input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="w-full border rounded px-3 py-2" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Note:</label>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} className="w-full border rounded px-3 py-2" rows={2} />
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Annulla</button>
+            <button
+              onClick={() => onConfirm({ movementType, location, materialCode, quantity: parseInt(quantity), note })}
+              disabled={!materialCode || !quantity}
+              className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+            >Registra Movimento</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// NOTE MODAL COMPONENT
+// ============================================
+function NoteModal({ component, onConfirm, onClose }) {
+  const [noteText, setNoteText] = useState('');
+  const [destination, setDestination] = useState('Site');
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <h3 className="text-lg font-semibold mb-4">🔍 Invia Nota a Site/Yard</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Destinazione:</label>
+            <select value={destination} onChange={(e) => setDestination(e.target.value)} className="w-full border rounded px-3 py-2">
+              <option value="Site">WH Site</option>
+              <option value="Yard">WH Yard</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nota:</label>
+            <textarea 
+              value={noteText} 
+              onChange={(e) => setNoteText(e.target.value)} 
+              className="w-full border rounded px-3 py-2" 
+              rows={3}
+              placeholder="Scrivi la nota da inviare..."
+            />
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Annulla</button>
+            <button
+              onClick={() => onConfirm(noteText, destination)}
+              disabled={!noteText.trim()}
+              className="px-4 py-2 text-white rounded disabled:opacity-50"
+              style={{ backgroundColor: '#7c3aed' }}
+            >Invia Nota</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// NEW REQUEST MODAL COMPONENT
+// ============================================
+function NewRequestModal({ onConfirm, onClose }) {
+  const [requester, setRequester] = useState('');
+  const [badge, setBadge] = useState('');
+  const [iso, setIso] = useState('');
+  const [spool, setSpool] = useState('');
+  const [hf, setHf] = useState('');
+  const [category, setCategory] = useState('');
+  const [components, setComponents] = useState([{ material_code: '', quantity: '', description: '' }]);
+  
+  const addComponent = () => {
+    setComponents([...components, { material_code: '', quantity: '', description: '' }]);
+  };
+  
+  const updateComponent = (index, field, value) => {
+    const updated = [...components];
+    updated[index][field] = value;
+    setComponents(updated);
+  };
+  
+  const removeComponent = (index) => {
+    if (components.length > 1) {
+      setComponents(components.filter((_, i) => i !== index));
+    }
+  };
+  
+  const canSubmit = requester && badge && components.some(c => c.material_code && c.quantity);
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-semibold mb-4">➕ Nuova Richiesta</h3>
+        
+        <div className="space-y-4">
+          {/* Request Info */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Richiedente *</label>
+              <input 
+                type="text" 
+                value={requester} 
+                onChange={(e) => setRequester(e.target.value)} 
+                className="w-full border rounded px-3 py-2"
+                placeholder="Nome richiedente"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Badge *</label>
+              <input 
+                type="text" 
+                value={badge} 
+                onChange={(e) => setBadge(e.target.value)} 
+                className="w-full border rounded px-3 py-2"
+                placeholder="Numero badge"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ISO</label>
+              <input 
+                type="text" 
+                value={iso} 
+                onChange={(e) => setIso(e.target.value)} 
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Spool</label>
+              <input 
+                type="text" 
+                value={spool} 
+                onChange={(e) => setSpool(e.target.value)} 
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">HF</label>
+              <input 
+                type="text" 
+                value={hf} 
+                onChange={(e) => setHf(e.target.value)} 
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+              <input 
+                type="text" 
+                value={category} 
+                onChange={(e) => setCategory(e.target.value)} 
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
+          </div>
+          
+          {/* Components */}
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium text-gray-700">Componenti *</label>
+              <button 
+                onClick={addComponent} 
+                className="text-blue-600 text-sm hover:text-blue-800"
+              >+ Aggiungi riga</button>
+            </div>
+            
+            <div className="space-y-2">
+              {components.map((comp, index) => (
+                <div key={index} className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    placeholder="Codice Materiale"
+                    value={comp.material_code}
+                    onChange={(e) => updateComponent(index, 'material_code', e.target.value)}
+                    className="flex-1 border rounded px-2 py-1.5 text-sm"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Qty"
+                    value={comp.quantity}
+                    onChange={(e) => updateComponent(index, 'quantity', e.target.value)}
+                    className="w-20 border rounded px-2 py-1.5 text-sm"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Descrizione"
+                    value={comp.description}
+                    onChange={(e) => updateComponent(index, 'description', e.target.value)}
+                    className="flex-1 border rounded px-2 py-1.5 text-sm"
+                  />
+                  {components.length > 1 && (
+                    <button 
+                      onClick={() => removeComponent(index)} 
+                      className="text-red-500 hover:text-red-700 px-2 text-lg"
+                    >×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Actions */}
+          <div className="flex gap-2 justify-end pt-4 border-t">
+            <button 
+              onClick={onClose} 
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+            >Annulla</button>
+            <button
+              onClick={() => onConfirm({ 
+                requester, 
+                badge, 
+                iso, 
+                spool, 
+                hf, 
+                category, 
+                components: components.filter(c => c.material_code && c.quantity) 
+              })}
+              disabled={!canSubmit}
+              className="px-4 py-2 text-white rounded disabled:opacity-50"
+              style={{ backgroundColor: '#E31E24' }}
+            >Crea Richiesta</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
