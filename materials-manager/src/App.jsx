@@ -523,38 +523,56 @@ export default function App() {
   // ============================================
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: COLORS.background }}>
-        <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
-          <div className="flex items-center justify-center mb-6">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center" style={{ backgroundColor: COLORS.primary, width: 56, height: 56, borderRadius: 12 }}>
-                <span className="text-white font-bold text-3xl">S</span>
-              </div>
-              <div>
-                <div className="font-bold text-xl" style={{ color: COLORS.secondary }}>STREICHER</div>
-                <div className="text-gray-500 text-sm">Materials Manager V25</div>
-              </div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f3f4f6' }}>
+        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md mx-4">
+          {/* Logo e Titolo centrati */}
+          <div className="text-center mb-8">
+            <div 
+              className="inline-flex items-center justify-center mb-4"
+              style={{ 
+                backgroundColor: COLORS.primary, 
+                width: 80, 
+                height: 80, 
+                borderRadius: 16,
+                boxShadow: '0 4px 14px rgba(227, 30, 36, 0.4)'
+              }}
+            >
+              <span className="text-white font-bold text-4xl">S</span>
             </div>
+            <h1 className="text-2xl font-bold" style={{ color: COLORS.secondary }}>STREICHER</h1>
+            <p className="text-gray-500 text-sm mt-1">Materials Manager V25</p>
           </div>
-          <div className="space-y-4">
+          
+          {/* Form Login */}
+          <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 focus:outline-none transition-all"
                 placeholder="Inserisci password..."
               />
             </div>
             <button
               onClick={handleLogin}
-              className="w-full py-2 px-4 text-white font-medium rounded-lg transition-colors hover:opacity-90"
-              style={{ backgroundColor: COLORS.primary }}
+              className="w-full py-3 px-4 text-white font-semibold rounded-lg transition-all hover:shadow-lg"
+              style={{ 
+                backgroundColor: COLORS.primary,
+                boxShadow: '0 2px 8px rgba(227, 30, 36, 0.3)'
+              }}
+              onMouseOver={(e) => e.target.style.backgroundColor = '#c91a1f'}
+              onMouseOut={(e) => e.target.style.backgroundColor = COLORS.primary}
             >
               Accedi
             </button>
+          </div>
+          
+          {/* Footer */}
+          <div className="mt-8 pt-6 border-t border-gray-100 text-center">
+            <p className="text-xs text-gray-400">© 2024 STREICHER - Warehouse Management System</p>
           </div>
         </div>
       </div>
